@@ -119,7 +119,7 @@ function initMod() {
                 name: "BC Outfit Manager (BCOM)",
                 fullName: "BC Outfit Manager (BCOM)",
                 version: VERSION_NUMBER,
-                repository: "Utsumi's Computer",
+                repository: "https://github.com/Utsumi24/BCOM",
             },
             {
                 allowReplace: true
