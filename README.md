@@ -17,7 +17,7 @@ https://utsumi24.github.io/BCOM/bcomloader.user.js
 
 ### Bookmark:
 ```
-javascript:(()=>{fetch('https://utsumi24.github.io/BCOM/bcomloader.user.js?'+Date.now()).then(r=>r.text()).then(r=>eval(r));})();
+javascript:(()=>{fetch('https://utsumi24.github.io/BCOM/bcom.js?'+Date.now()).then(r=>r.text()).then(r=>eval(r));})();
 ```
 
 ### Disclaimer
