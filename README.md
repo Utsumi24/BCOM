@@ -1,7 +1,9 @@
 # BC Outfit Manager (BCOM)
 
 ### Where do I find it?
-The Outfit Manager is found after you click on your character or another character.  It will be located in the lower-left corner of your screen (to the left of the WCE Instant Message button if you use it).
+You can open the Outfit Manager in two ways:
+-The Outfit Manager is found after you click on your character or another character.  It will be located in the lower-left corner of your screen (to the left of the WCE Instant Message button if you use it).
+-Typing '/bcom' in chat.  If you specify a player name or a member number, it'll open the Outfit Manager as that targeted player instead.
 
 ### What does this do?
 It allows you to save outfits (including restraints) to your browser's local storage and also saving outfits via BCX outfit codes.  Outfits can also be applied to other players if you click on them in chatrooms. WCE's anti-cheat will still trigger if the target player has it enabled. The Outfit Manager provides help text on the left side of the screen. You can even export your entire Outfit Manager list to be saved locally and to be imported later.
