@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         BC Outfit Manager
 // @namespace https://www.bondageprojects.com/
-// @version      0.7.1
+// @version      0.7.2
 // @description  Outfit management system for Bondage Club
 // @author       Utsumi
 // @match https://bondageprojects.elementfx.com/*
@@ -15,10 +15,17 @@
 
 var bcModSdk=function(){"use strict";const o="1.2.0";function e(o){alert("Mod ERROR:\n"+o);const e=new Error(o);throw console.error(e),e}const t=new TextEncoder;function n(o){return!!o&&"object"==typeof o&&!Array.isArray(o)}function r(o){const e=new Set;return o.filter((o=>!e.has(o)&&e.add(o)))}const i=new Map,a=new Set;function c(o){a.has(o)||(a.add(o),console.warn(o))}function s(o){const e=[],t=new Map,n=new Set;for(const r of f.values()){const i=r.patching.get(o.name);if(i){e.push(...i.hooks);for(const[e,a]of i.patches.entries())t.has(e)&&t.get(e)!==a&&c(`ModSDK: Mod '${r.name}' is patching function ${o.name} with same pattern that is already applied by different mod, but with different pattern:\nPattern:\n${e}\nPatch1:\n${t.get(e)||""}\nPatch2:\n${a}`),t.set(e,a),n.add(r.name)}}e.sort(((o,e)=>e.priority-o.priority));const r=function(o,e){if(0===e.size)return o;let t=o.toString().replaceAll("\r\n","\n");for(const[n,r]of e.entries())t.includes(n)||c(`ModSDK: Patching ${o.name}: Patch ${n} not applied`),t=t.replaceAll(n,r);return(0,eval)(`(${t})`)}(o.original,t);let i=function(e){var t,i;const a=null===(i=(t=m.errorReporterHooks).hookChainExit)||void 0===i?void 0:i.call(t,o.name,n),c=r.apply(this,e);return null==a||a(),c};for(let t=e.length-1;t>=0;t--){const n=e[t],r=i;i=function(e){var t,i;const a=null===(i=(t=m.errorReporterHooks).hookEnter)||void 0===i?void 0:i.call(t,o.name,n.mod),c=n.hook.apply(this,[e,o=>{if(1!==arguments.length||!Array.isArray(e))throw new Error(`Mod ${n.mod} failed to call next hook: Expected args to be array, got ${typeof o}`);return r.call(this,o)}]);return null==a||a(),c}}return{hooks:e,patches:t,patchesSources:n,enter:i,final:r}}function l(o,e=!1){let r=i.get(o);if(r)e&&(r.precomputed=s(r));else{let e=window;const a=o.split(".");for(let t=0;t<a.length-1;t++)if(e=e[a[t]],!n(e))throw new Error(`ModSDK: Function ${o} to be patched not found; ${a.slice(0,t+1).join(".")} is not object`);const c=e[a[a.length-1]];if("function"!=typeof c)throw new Error(`ModSDK: Function ${o} to be patched not found`);const l=function(o){let e=-1;for(const n of t.encode(o)){let o=255&(e^n);for(let e=0;e<8;e++)o=1&o?-306674912^o>>>1:o>>>1;e=e>>>8^o}return((-1^e)>>>0).toString(16).padStart(8,"0").toUpperCase()}(c.toString().replaceAll("\r\n","\n")),d={name:o,original:c,originalHash:l};r=Object.assign(Object.assign({},d),{precomputed:s(d),router:()=>{},context:e,contextProperty:a[a.length-1]}),r.router=function(o){return function(...e){return o.precomputed.enter.apply(this,[e])}}(r),i.set(o,r),e[r.contextProperty]=r.router}return r}function d(){for(const o of i.values())o.precomputed=s(o)}function p(){const o=new Map;for(const[e,t]of i)o.set(e,{name:e,original:t.original,originalHash:t.originalHash,sdkEntrypoint:t.router,currentEntrypoint:t.context[t.contextProperty],hookedByMods:r(t.precomputed.hooks.map((o=>o.mod))),patchedByMods:Array.from(t.precomputed.patchesSources)});return o}const f=new Map;function u(o){f.get(o.name)!==o&&e(`Failed to unload mod '${o.name}': Not registered`),f.delete(o.name),o.loaded=!1,d()}function g(o,t){o&&"object"==typeof o||e("Failed to register mod: Expected info object, got "+typeof o),"string"==typeof o.name&&o.name||e("Failed to register mod: Expected name to be non-empty string, got "+typeof o.name);let r=`'${o.name}'`;"string"==typeof o.fullName&&o.fullName||e(`Failed to register mod ${r}: Expected fullName to be non-empty string, got ${typeof o.fullName}`),r=`'${o.fullName} (${o.name})'`,"string"!=typeof o.version&&e(`Failed to register mod ${r}: Expected version to be string, got ${typeof o.version}`),o.repository||(o.repository=void 0),void 0!==o.repository&&"string"!=typeof o.repository&&e(`Failed to register mod ${r}: Expected repository to be undefined or string, got ${typeof o.version}`),null==t&&(t={}),t&&"object"==typeof t||e(`Failed to register mod ${r}: Expected options to be undefined or object, got ${typeof t}`);const i=!0===t.allowReplace,a=f.get(o.name);a&&(a.allowReplace&&i||e(`Refusing to load mod ${r}: it is already loaded and doesn't allow being replaced.\nWas the mod loaded multiple times?`),u(a));const c=o=>{let e=g.patching.get(o.name);return e||(e={hooks:[],patches:new Map},g.patching.set(o.name,e)),e},s=(o,t)=>(...n)=>{var i,a;const c=null===(a=(i=m.errorReporterHooks).apiEndpointEnter)||void 0===a?void 0:a.call(i,o,g.name);g.loaded||e(`Mod ${r} attempted to call SDK function after being unloaded`);const s=t(...n);return null==c||c(),s},p={unload:s("unload",(()=>u(g))),hookFunction:s("hookFunction",((o,t,n)=>{"string"==typeof o&&o||e(`Mod ${r} failed to patch a function: Expected function name string, got ${typeof o}`);const i=l(o),a=c(i);"number"!=typeof t&&e(`Mod ${r} failed to hook function '${o}': Expected priority number, got ${typeof t}`),"function"!=typeof n&&e(`Mod ${r} failed to hook function '${o}': Expected hook function, got ${typeof n}`);const s={mod:g.name,priority:t,hook:n};return a.hooks.push(s),d(),()=>{const o=a.hooks.indexOf(s);o>=0&&(a.hooks.splice(o,1),d())}})),patchFunction:s("patchFunction",((o,t)=>{"string"==typeof o&&o||e(`Mod ${r} failed to patch a function: Expected function name string, got ${typeof o}`);const i=l(o),a=c(i);n(t)||e(`Mod ${r} failed to patch function '${o}': Expected patches object, got ${typeof t}`);for(const[n,i]of Object.entries(t))"string"==typeof i?a.patches.set(n,i):null===i?a.patches.delete(n):e(`Mod ${r} failed to patch function '${o}': Invalid format of patch '${n}'`);d()})),removePatches:s("removePatches",(o=>{"string"==typeof o&&o||e(`Mod ${r} failed to patch a function: Expected function name string, got ${typeof o}`);const t=l(o);c(t).patches.clear(),d()})),callOriginal:s("callOriginal",((o,t,n)=>{"string"==typeof o&&o||e(`Mod ${r} failed to call a function: Expected function name string, got ${typeof o}`);const i=l(o);return Array.isArray(t)||e(`Mod ${r} failed to call a function: Expected args array, got ${typeof t}`),i.original.apply(null!=n?n:globalThis,t)})),getOriginalHash:s("getOriginalHash",(o=>{"string"==typeof o&&o||e(`Mod ${r} failed to get hash: Expected function name string, got ${typeof o}`);return l(o).originalHash}))},g={name:o.name,fullName:o.fullName,version:o.version,repository:o.repository,allowReplace:i,api:p,loaded:!0,patching:new Map};return f.set(o.name,g),Object.freeze(p)}function h(){const o=[];for(const e of f.values())o.push({name:e.name,fullName:e.fullName,version:e.version,repository:e.repository});return o}let m;const y=void 0===window.bcModSdk?window.bcModSdk=function(){const e={version:o,apiVersion:1,registerMod:g,getModsInfo:h,getPatchingInfo:p,errorReporterHooks:Object.seal({apiEndpointEnter:null,hookEnter:null,hookChainExit:null})};return m=e,Object.freeze(e)}():(n(window.bcModSdk)||e("Failed to init Mod SDK: Name already in use"),1!==window.bcModSdk.apiVersion&&e(`Failed to init Mod SDK: Different version already loaded ('1.2.0' vs '${window.bcModSdk.version}')`),window.bcModSdk.version!==o&&alert(`Mod SDK warning: Loading different but compatible versions ('1.2.0' vs '${window.bcModSdk.version}')\nOne of mods you are using is using an old version of SDK. It will work for now but please inform author to update`),window.bcModSdk);return"undefined"!=typeof exports&&(Object.defineProperty(exports,"__esModule",{value:!0}),exports.default=y),y}();
 
-const VERSION_NUMBER = "0.7.1";
+const VERSION_NUMBER = "0.7.2";
 
 /*
 # BC Outfit Manager Changelog
+
+## v0.7.2
+- Fixed issue with duplicate outfit names across different folders
+- Added check to prevent moving outfits when name conflicts exist in the destination folder
+- Added check to prevent saving an outfit when the name already exists in another folder
+- Fixed notification when importing outfits to show the actual number of outfits imported instead of the total number of outfits
+- Added chat command "bcom" to open the outfit manager for a specific character, if a name is provided, or for yourself if no name is provided
 
 ## v0.7.1
 - Ensured that all modes are reset when exiting Outfit Manager
@@ -445,9 +452,18 @@ function initMod() {
                     
                     const outfitStorage = JSON.parse(storageData);
                     
-                    // Check if any outfits are already in this folder (no need to move)
+                    // Check for outfits that would cause naming conflicts
                     const outfitsToMove = [];
                     const outfitsAlreadyInFolder = [];
+                    const conflictingOutfits = [];
+                    
+                    // Get all outfit names in the destination folder (excluding selected outfits)
+                    const existingNamesInFolder = new Set();
+                    outfitStorage.outfits.forEach(o => {
+                        if (o.folder === currentFolder && !selectedOutfits.includes(o.name)) {
+                            existingNamesInFolder.add(o.name);
+                        }
+                    });
                     
                     for (const outfitName of selectedOutfits) {
                         const outfitIndex = outfitStorage.outfits.findIndex(o => o.name === outfitName);
@@ -457,10 +473,19 @@ function initMod() {
                             
                             if (outfitFolder === currentFolder) {
                                 outfitsAlreadyInFolder.push(outfitName);
+                            } else if (existingNamesInFolder.has(outfitName)) {
+                                // Name conflict with existing outfit in destination folder
+                                conflictingOutfits.push(outfitName);
                             } else {
                                 outfitsToMove.push({name: outfitName, index: outfitIndex});
                             }
                         }
+                    }
+                    
+                    // Handle conflicts first - most important message
+                    if (conflictingOutfits.length > 0) {
+                        ShowOutfitNotification(`Cannot move: ${conflictingOutfits.length} outfit(s) have name conflicts in "${currentFolder}"`);
+                        return;
                     }
                     
                     // If some outfits are already in this folder, show a warning
@@ -482,62 +507,10 @@ function initMod() {
                         selectedOutfits = [];
                         
                         ShowOutfitNotification(`Moved ${outfitsToMove.length} outfit(s) to "${currentFolder}"`);
-                    } else if (outfitsAlreadyInFolder.length === 0) {
+                    } else if (outfitsAlreadyInFolder.length === 0 && conflictingOutfits.length === 0) {
                         ShowOutfitNotification("No outfits selected to move");
                     }
                     return;
-                }
-                
-                // New prev/next folder buttons
-                if (MouseIn(1130, 180, 90, 60) && !isFolderManagementMode) {
-                    // Previous folder button - find the folder that comes before the current one alphabetically
-                    const memberNumber = Player.MemberNumber;
-                    const storageKey = `${STORAGE_PREFIX}${memberNumber}`;
-                    const storageData = localStorage.getItem(storageKey);
-                    
-                    if (storageData) {
-                        const outfitStorage = JSON.parse(storageData);
-                        const folders = outfitStorage.folders || ["Main"];
-                        folders.sort(); // Sort alphabetically
-                        
-                        const currentIndex = folders.indexOf(currentFolder);
-                        if (currentIndex > 0) {
-                            currentFolder = folders[currentIndex - 1];
-                            DialogOutfitPage = 0; // Reset to first page when changing folders
-                        }
-                    }
-                    return;
-                }
-                
-                if (MouseIn(1680, 180, 90, 60) && !isFolderManagementMode) {
-                    // Next folder button - find the folder that comes after the current one alphabetically
-                    const memberNumber = Player.MemberNumber;
-                    const storageKey = `${STORAGE_PREFIX}${memberNumber}`;
-                    const storageData = localStorage.getItem(storageKey);
-                    
-                    if (storageData) {
-                        const outfitStorage = JSON.parse(storageData);
-                        const folders = outfitStorage.folders || ["Main"];
-                        folders.sort(); // Sort alphabetically
-                        
-                        const currentIndex = folders.indexOf(currentFolder);
-                        if (currentIndex < folders.length - 1) {
-                            currentFolder = folders[currentIndex + 1];
-                            DialogOutfitPage = 0; // Reset to first page when changing folders
-                        }
-                    }
-                    return;
-                }
-                
-                // Folder navigation buttons - if not in folder management mode
-                if (!isFolderManagementMode) {
-                    // We don't need these small navigation buttons anymore as we now have folder items in the list
-                }
-        
-                // Folder management interface clicks
-                if (isFolderManagementMode) {
-                    // The new folder management interface with checkboxes and move/edit is already implemented
-                    // We don't need the old folder management code here anymore
                 }
         
                 // Check outfit clicks for current page
@@ -789,8 +762,10 @@ function initMod() {
                                 const storageData = localStorage.getItem(storageKey);
                                 if (storageData) {
                                     const outfitStorage = JSON.parse(storageData);
-                                    // Remove the outfit by name
-                                    outfitStorage.outfits = outfitStorage.outfits.filter(o => o.name !== outfit.name);
+                                    // Remove the outfit by name AND folder
+                                    outfitStorage.outfits = outfitStorage.outfits.filter(o => 
+                                        !(o.name === outfit.name && (o.folder || "Main") === currentFolder)
+                                    );
                                     // Save back to storage
                                     localStorage.setItem(storageKey, JSON.stringify(outfitStorage));
                                 }
@@ -1257,11 +1232,15 @@ function initMod() {
                     DrawButton(1210, yPos, 490, 60, `${outfitNumber}. ${outfit.name}`, "White");
                 } else if (isSortMode) {
                     // In sort mode, show up/down arrows instead of rename/delete
-                    if (i > 0 && !outfits[i-1].isFolder) { // Not first outfit and previous item is not a folder
-                        DrawButton(1150, yPos + 5, 50, 50, "↑", "White", "");
+                    if (i > 0 && !outfits[i-1].isFolder && MouseIn(1150, yPos + 5, 50, 50)) {
+                        [outfits[i], outfits[i-1]] = [outfits[i-1], outfits[i]];
+                        saveOutfits(outfits);
+                        return;
                     }
-                    if (i < outfits.length - 1 && !outfits[i+1].isFolder) { // Not last outfit and next item is not a folder
-                        DrawButton(1710, yPos + 5, 50, 50, "↓", "White", "");
+                    if (i < outfits.length - 1 && !outfits[i+1].isFolder && MouseIn(1710, yPos + 5, 50, 50)) {
+                        [outfits[i], outfits[i+1]] = [outfits[i+1], outfits[i]];
+                        saveOutfits(outfits);
+                        return;
                     }
                     
                     // Calculate outfit number (exclude folders from numbering)
@@ -1487,16 +1466,31 @@ function initMod() {
                     return;
                 }
 
-                // Check for existing outfit with same name
-                const existingIndex = outfitStorage.outfits.findIndex(o => o.name === outfitName && 
-                    (o.folder === currentFolder || (!o.folder && currentFolder === "Main")));
+                // First check for outfit with same name in ANY folder
+                const sameNameOutfits = outfitStorage.outfits.filter(o => o.name === outfitName);
+                
+                if (sameNameOutfits.length > 0) {
+                    // Check if it exists in current folder
+                    const existingInCurrentFolder = sameNameOutfits.find(o => 
+                        (o.folder === currentFolder) || (!o.folder && currentFolder === "Main"));
                     
-                if (existingIndex >= 0) {
-                    if (!confirm(`Outfit "${outfitName}" already exists in folder "${currentFolder}". Do you want to overwrite it?`)) {
+                    if (existingInCurrentFolder) {
+                        // Outfit exists in current folder - ask to overwrite
+                        if (!confirm(`Outfit "${outfitName}" already exists in folder "${currentFolder}". Do you want to overwrite it?`)) {
+                            return;
+                        }
+                        // Remove the existing outfit
+                        const existingIndex = outfitStorage.outfits.findIndex(o => 
+                            o.name === outfitName && 
+                            ((o.folder === currentFolder) || (!o.folder && currentFolder === "Main")));
+                        outfitStorage.outfits.splice(existingIndex, 1);
+                        ShowOutfitNotification(`Outfit "${outfitName}" has been overwritten`);
+                    } else {
+                        // Outfit exists in different folder(s) - prevent saving with same name
+                        const otherFolders = sameNameOutfits.map(o => o.folder || "Main").join(", ");
+                        alert(`An outfit named "${outfitName}" already exists in folder(s): ${otherFolders}.\nPlease choose a different name.`);
                         return;
                     }
-                    outfitStorage.outfits.splice(existingIndex, 1);
-                    ShowOutfitNotification(`Outfit "${outfitName}" has been overwritten`);
                 } else {
                     ShowOutfitNotification(`Outfit "${outfitName}" has been saved to folder "${currentFolder}"`);
                 }
@@ -1645,10 +1639,10 @@ function initMod() {
             }
         }
 
-        function ShowOutfitNotification(message) {
+        function ShowOutfitNotification(message, duration = 3) {
             ServerBeep = {
                 Message: message,
-                Timer: CommonTime() + 2000,  // Show for 2 seconds
+                Timer: CommonTime() + (duration * 1000),  // Convert milliseconds to seconds
                 ChatRoomName: null
             };
         }
@@ -1821,6 +1815,7 @@ function initMod() {
                                 const existingData = localStorage.getItem(storageKey);
                                 
                                 let finalOutfits = backupData.data;
+                                let actualImportCount = backupData.data.outfits.length; // Track actual imports
                                 
                                 if (existingData) {
                                     try {
@@ -1886,12 +1881,14 @@ function initMod() {
                                                             outfits: [...filteredOutfits, ...backupData.data.outfits],
                                                             folders: combinedFolders
                                                         };
+                                                        actualImportCount = backupData.data.outfits.length;
                                                     } else {
                                                         // Keep existing outfits, only add non-conflicting ones
                                                         finalOutfits = {
                                                             outfits: [...existingOutfits.outfits, ...newOutfits],
                                                             folders: combinedFolders
                                                         };
+                                                        actualImportCount = newOutfits.length;
                                                     }
                                                 } else {
                                                     // No conflicts, just add all
@@ -1899,16 +1896,18 @@ function initMod() {
                                                         outfits: [...existingOutfits.outfits, ...newOutfits],
                                                         folders: combinedFolders
                                                     };
+                                                    actualImportCount = newOutfits.length;
                                                 }
+                                            } else {
+                                                // User chose to replace all existing outfits
+                                                actualImportCount = backupData.data.outfits.length;
                                             }
-                                        } else {
-                                            // No existing outfits to worry about, just use the imported ones
-                                            finalOutfits = backupData.data;
                                         }
                                     } catch (error) {
                                         console.error("Error parsing existing outfits:", error);
                                         // If we can't parse the existing data, just use the imported outfits
                                         finalOutfits = backupData.data;
+                                        actualImportCount = backupData.data.outfits.length;
                                     }
                                 }
                                 
@@ -1917,7 +1916,11 @@ function initMod() {
                                     if (!confirm(`This would exceed the maximum of ${MAX_OUTFITS} outfits. Import only the first ${MAX_OUTFITS} outfits?`)) {
                                         return;
                                     }
+                                    // Adjust the actual import count if we're limiting outfits
+                                    const beforeLimit = finalOutfits.outfits.length;
                                     finalOutfits.outfits = finalOutfits.outfits.slice(0, MAX_OUTFITS);
+                                    const afterLimit = finalOutfits.outfits.length;
+                                    actualImportCount = Math.max(0, actualImportCount - (beforeLimit - afterLimit));
                                 }
                                 
                                 // Ensure we have a Main folder (without adding duplicates)
@@ -1936,7 +1939,8 @@ function initMod() {
                                     currentFolder = "Main";
                                 }
                                 
-                                ShowOutfitNotification(`Successfully imported ${finalOutfits.outfits.length} outfits in ${finalOutfits.folders.length} folders`);
+                                // Use the actual import count in the notification
+                                ShowOutfitNotification(`Successfully imported ${actualImportCount} outfits in ${finalOutfits.folders.length} folders`);
                             } catch (error) {
                                 console.error("Import failed:", error);
                                 ShowOutfitNotification("Failed to import: Invalid backup file");
@@ -1962,6 +1966,79 @@ function initMod() {
             if (folderName.length <= maxLength) return folderName;
             return folderName.substring(0, maxLength - 3) + "...";
         }
+
+        function targetfinder(input) {
+            if (!input || !ChatRoomCharacter || ChatRoomCharacter.length === 0) return null;
+            
+            // Check if input is a pure number (member number)
+            if (/^\d+$/.test(input)) {
+                const memberNumber = parseInt(input);
+                const target = ChatRoomCharacter.find(c => c.MemberNumber === memberNumber);
+                if (target) return target;
+            }
+            
+            // Convert to lowercase for all string comparisons
+            const searchText = input.toLowerCase();
+            
+            // First try exact full name matches
+            for (const c of ChatRoomCharacter) {
+                if (c.Name.toLowerCase() === searchText || CharacterNickname(c).toLowerCase() === searchText) {
+                    return c;
+                }
+            }
+            
+            // Try first name matches
+            for (const c of ChatRoomCharacter) {
+                const firstName = c.Name.split(" ")[0]?.toLowerCase();
+                const nickFirstName = CharacterNickname(c).split(" ")[0]?.toLowerCase();
+                if (firstName === searchText || nickFirstName === searchText) {
+                    return c;
+                }
+            }
+            
+            // Try partial name matches
+            for (const c of ChatRoomCharacter) {
+                if (c.Name.toLowerCase().includes(searchText) || CharacterNickname(c).toLowerCase().includes(searchText)) {
+                    return c;
+                }
+            }
+            
+            // No match found
+            return null;
+        }
+
+        CommandCombine([
+            {
+                Tag: "bcom",
+                Description: "Opens the outfit manager. Enter a character name or member number to open the outfit manager for that character or nothing to open it on yourself.",
+                Action: (args) => {
+                    let targetCharacter = null;
+                    
+                    // If no arguments, target self
+                    if (!args || args.trim() === "") {
+                        targetCharacter = Player;
+                    } else {
+                        // Use targetfinder function to find character by name or member number
+                        targetCharacter = targetfinder(args);
+                        
+                        // If character not found, display error and return
+                        if (!targetCharacter) {
+                            ChatRoomSendLocal("Player not found. Please check the name or member number and try again.");
+                            return; // Exit the command without opening the outfit manager
+                        }
+                    }
+                    
+                    // Open dialog with target character
+                    ChatRoomCharacterViewClickCharacter(targetCharacter);
+                    
+                    // After dialog is open, switch to outfit mode
+                    setTimeout(() => {
+                        PreviousDialogMode = DialogMenuMode;
+                        DialogChangeMode("outfits");
+                    }, 10);
+                }
+            }
+        ]);
 
     } catch (error) {
         console.error('OutfitManager failed:', error);
