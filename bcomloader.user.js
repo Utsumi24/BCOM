@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         BC Outfit Manager
+// @name         BC Outfit Manager Loader
 // @namespace    https://www.bondageprojects.com/
-// @version      0.6.1
-// @description  Outfit management system for Bondage Club
+// @version      0.1
+// @description  Loader for BCOM
 // @author       Utsumi
 // @match        https://bondageprojects.elementfx.com/*
 // @match        https://www.bondageprojects.elementfx.com/*
