@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         BC Outfit Manager
 // @namespace https://www.bondageprojects.com/
-// @version      0.7.3
+// @version      0.7.4
 // @description  Outfit management system for Bondage Club
 // @author       Utsumi
 // @match https://bondageprojects.elementfx.com/*
@@ -15,10 +15,17 @@
 
 var bcModSdk=function(){"use strict";const o="1.2.0";function e(o){alert("Mod ERROR:\n"+o);const e=new Error(o);throw console.error(e),e}const t=new TextEncoder;function n(o){return!!o&&"object"==typeof o&&!Array.isArray(o)}function r(o){const e=new Set;return o.filter((o=>!e.has(o)&&e.add(o)))}const i=new Map,a=new Set;function c(o){a.has(o)||(a.add(o),console.warn(o))}function s(o){const e=[],t=new Map,n=new Set;for(const r of f.values()){const i=r.patching.get(o.name);if(i){e.push(...i.hooks);for(const[e,a]of i.patches.entries())t.has(e)&&t.get(e)!==a&&c(`ModSDK: Mod '${r.name}' is patching function ${o.name} with same pattern that is already applied by different mod, but with different pattern:\nPattern:\n${e}\nPatch1:\n${t.get(e)||""}\nPatch2:\n${a}`),t.set(e,a),n.add(r.name)}}e.sort(((o,e)=>e.priority-o.priority));const r=function(o,e){if(0===e.size)return o;let t=o.toString().replaceAll("\r\n","\n");for(const[n,r]of e.entries())t.includes(n)||c(`ModSDK: Patching ${o.name}: Patch ${n} not applied`),t=t.replaceAll(n,r);return(0,eval)(`(${t})`)}(o.original,t);let i=function(e){var t,i;const a=null===(i=(t=m.errorReporterHooks).hookChainExit)||void 0===i?void 0:i.call(t,o.name,n),c=r.apply(this,e);return null==a||a(),c};for(let t=e.length-1;t>=0;t--){const n=e[t],r=i;i=function(e){var t,i;const a=null===(i=(t=m.errorReporterHooks).hookEnter)||void 0===i?void 0:i.call(t,o.name,n.mod),c=n.hook.apply(this,[e,o=>{if(1!==arguments.length||!Array.isArray(e))throw new Error(`Mod ${n.mod} failed to call next hook: Expected args to be array, got ${typeof o}`);return r.call(this,o)}]);return null==a||a(),c}}return{hooks:e,patches:t,patchesSources:n,enter:i,final:r}}function l(o,e=!1){let r=i.get(o);if(r)e&&(r.precomputed=s(r));else{let e=window;const a=o.split(".");for(let t=0;t<a.length-1;t++)if(e=e[a[t]],!n(e))throw new Error(`ModSDK: Function ${o} to be patched not found; ${a.slice(0,t+1).join(".")} is not object`);const c=e[a[a.length-1]];if("function"!=typeof c)throw new Error(`ModSDK: Function ${o} to be patched not found`);const l=function(o){let e=-1;for(const n of t.encode(o)){let o=255&(e^n);for(let e=0;e<8;e++)o=1&o?-306674912^o>>>1:o>>>1;e=e>>>8^o}return((-1^e)>>>0).toString(16).padStart(8,"0").toUpperCase()}(c.toString().replaceAll("\r\n","\n")),d={name:o,original:c,originalHash:l};r=Object.assign(Object.assign({},d),{precomputed:s(d),router:()=>{},context:e,contextProperty:a[a.length-1]}),r.router=function(o){return function(...e){return o.precomputed.enter.apply(this,[e])}}(r),i.set(o,r),e[r.contextProperty]=r.router}return r}function d(){for(const o of i.values())o.precomputed=s(o)}function p(){const o=new Map;for(const[e,t]of i)o.set(e,{name:e,original:t.original,originalHash:t.originalHash,sdkEntrypoint:t.router,currentEntrypoint:t.context[t.contextProperty],hookedByMods:r(t.precomputed.hooks.map((o=>o.mod))),patchedByMods:Array.from(t.precomputed.patchesSources)});return o}const f=new Map;function u(o){f.get(o.name)!==o&&e(`Failed to unload mod '${o.name}': Not registered`),f.delete(o.name),o.loaded=!1,d()}function g(o,t){o&&"object"==typeof o||e("Failed to register mod: Expected info object, got "+typeof o),"string"==typeof o.name&&o.name||e("Failed to register mod: Expected name to be non-empty string, got "+typeof o.name);let r=`'${o.name}'`;"string"==typeof o.fullName&&o.fullName||e(`Failed to register mod ${r}: Expected fullName to be non-empty string, got ${typeof o.fullName}`),r=`'${o.fullName} (${o.name})'`,"string"!=typeof o.version&&e(`Failed to register mod ${r}: Expected version to be string, got ${typeof o.version}`),o.repository||(o.repository=void 0),void 0!==o.repository&&"string"!=typeof o.repository&&e(`Failed to register mod ${r}: Expected repository to be undefined or string, got ${typeof o.version}`),null==t&&(t={}),t&&"object"==typeof t||e(`Failed to register mod ${r}: Expected options to be undefined or object, got ${typeof t}`);const i=!0===t.allowReplace,a=f.get(o.name);a&&(a.allowReplace&&i||e(`Refusing to load mod ${r}: it is already loaded and doesn't allow being replaced.\nWas the mod loaded multiple times?`),u(a));const c=o=>{let e=g.patching.get(o.name);return e||(e={hooks:[],patches:new Map},g.patching.set(o.name,e)),e},s=(o,t)=>(...n)=>{var i,a;const c=null===(a=(i=m.errorReporterHooks).apiEndpointEnter)||void 0===a?void 0:a.call(i,o,g.name);g.loaded||e(`Mod ${r} attempted to call SDK function after being unloaded`);const s=t(...n);return null==c||c(),s},p={unload:s("unload",(()=>u(g))),hookFunction:s("hookFunction",((o,t,n)=>{"string"==typeof o&&o||e(`Mod ${r} failed to patch a function: Expected function name string, got ${typeof o}`);const i=l(o),a=c(i);"number"!=typeof t&&e(`Mod ${r} failed to hook function '${o}': Expected priority number, got ${typeof t}`),"function"!=typeof n&&e(`Mod ${r} failed to hook function '${o}': Expected hook function, got ${typeof n}`);const s={mod:g.name,priority:t,hook:n};return a.hooks.push(s),d(),()=>{const o=a.hooks.indexOf(s);o>=0&&(a.hooks.splice(o,1),d())}})),patchFunction:s("patchFunction",((o,t)=>{"string"==typeof o&&o||e(`Mod ${r} failed to patch a function: Expected function name string, got ${typeof o}`);const i=l(o),a=c(i);n(t)||e(`Mod ${r} failed to patch function '${o}': Expected patches object, got ${typeof t}`);for(const[n,i]of Object.entries(t))"string"==typeof i?a.patches.set(n,i):null===i?a.patches.delete(n):e(`Mod ${r} failed to patch function '${o}': Invalid format of patch '${n}'`);d()})),removePatches:s("removePatches",(o=>{"string"==typeof o&&o||e(`Mod ${r} failed to patch a function: Expected function name string, got ${typeof o}`);const t=l(o);c(t).patches.clear(),d()})),callOriginal:s("callOriginal",((o,t,n)=>{"string"==typeof o&&o||e(`Mod ${r} failed to call a function: Expected function name string, got ${typeof o}`);const i=l(o);return Array.isArray(t)||e(`Mod ${r} failed to call a function: Expected args array, got ${typeof t}`),i.original.apply(null!=n?n:globalThis,t)})),getOriginalHash:s("getOriginalHash",(o=>{"string"==typeof o&&o||e(`Mod ${r} failed to get hash: Expected function name string, got ${typeof o}`);return l(o).originalHash}))},g={name:o.name,fullName:o.fullName,version:o.version,repository:o.repository,allowReplace:i,api:p,loaded:!0,patching:new Map};return f.set(o.name,g),Object.freeze(p)}function h(){const o=[];for(const e of f.values())o.push({name:e.name,fullName:e.fullName,version:e.version,repository:e.repository});return o}let m;const y=void 0===window.bcModSdk?window.bcModSdk=function(){const e={version:o,apiVersion:1,registerMod:g,getModsInfo:h,getPatchingInfo:p,errorReporterHooks:Object.seal({apiEndpointEnter:null,hookEnter:null,hookChainExit:null})};return m=e,Object.freeze(e)}():(n(window.bcModSdk)||e("Failed to init Mod SDK: Name already in use"),1!==window.bcModSdk.apiVersion&&e(`Failed to init Mod SDK: Different version already loaded ('1.2.0' vs '${window.bcModSdk.version}')`),window.bcModSdk.version!==o&&alert(`Mod SDK warning: Loading different but compatible versions ('1.2.0' vs '${window.bcModSdk.version}')\nOne of mods you are using is using an old version of SDK. It will work for now but please inform author to update`),window.bcModSdk);return"undefined"!=typeof exports&&(Object.defineProperty(exports,"__esModule",{value:!0}),exports.default=y),y}();
 
-const VERSION_NUMBER = "0.7.3";
+const VERSION_NUMBER = "0.7.4";
 
 /*
 # BC Outfit Manager Changelog
+
+## v0.7.4
+- Added a better check for the /bcom command when a name is specified, it exclusively checks for the character's nickname
+- Added a check for the /bcom command if more than one character has the same first name, it will notify the user to use the member number instead
+- Fixed exit button not working if there is no previous dialog mode to return to, it now defaults to the 'dialog'
+- Added permission check to prevent the outfit manager from being opened if the player doesn't have permission to interact with the character that was clicked on
+- Added permission check for the /bcom command
 
 ## v0.7.3
 - Cosplay items are not removed when previewing or applying an outfit
@@ -249,15 +256,18 @@ function initMod() {
         // Update drawing code
         modApi.hookFunction("DialogDraw", 0, (args, next) => {
             if (DialogMenuMode === "items" || DialogMenuMode === "dialog") {
+                // Check if we have permission to modify the character's outfit
+                const hasPermission = CurrentCharacter.MemberNumber === Player.MemberNumber || CurrentCharacter.AllowItem;
+                
                 DrawButton(
-                    OUTFIT_BUTTON_X,  // X: 70 - 60 - 5 = 5
+                    OUTFIT_BUTTON_X,
                     905,
                     BUTTON_SIZE,
                     BUTTON_SIZE,
                     "",
-                    DialogMenuMode === "outfits" ? "Cyan" : "White",
-                    "",  // Remove the icon here
-                    "Outfit Manager"
+                    hasPermission ? "White" : "Pink",
+                    "",
+                    hasPermission ? "Outfit Manager" : "You don't have permission to interact with this player"
                 );
                 DrawImageResize("Icons/Dress.png",
                     OUTFIT_BUTTON_X + 5,
@@ -371,6 +381,10 @@ function initMod() {
                     const importElement = document.getElementById("OutfitManagerImport");
                     if (importElement) importElement.value = "";
                     
+                    // Add failsafe for PreviousDialogMode
+                    if (!PreviousDialogMode) {
+                        PreviousDialogMode = "dialog";
+                    }
                     DialogChangeMode(PreviousDialogMode);
                     return;
                 }                
@@ -790,9 +804,14 @@ function initMod() {
         
             if (DialogMenuMode === "items" || DialogMenuMode === "dialog") {
                 if (MouseIn(OUTFIT_BUTTON_X, 905, BUTTON_SIZE, BUTTON_SIZE)) {
-                    PreviousDialogMode = DialogMenuMode;
-                    DialogChangeMode("outfits");
-                    DialogMenuButton = [];
+                    // Check if this is the player's character or if we have permission
+                    if (CurrentCharacter.MemberNumber === Player.MemberNumber || CurrentCharacter.AllowItem) {
+                        PreviousDialogMode = DialogMenuMode;
+                        DialogChangeMode("outfits");
+                        DialogMenuButton = [];
+                    } else {
+                        ShowOutfitNotification("You don't have permission to interact with this player");
+                    }
                     return true;
                 }
             }
@@ -1992,27 +2011,60 @@ function initMod() {
             // Convert to lowercase for all string comparisons
             const searchText = input.toLowerCase();
             
-            // First try exact full name matches
+            // Check for duplicate nicknames in the room before searching
+            const nicknameCounts = {};
             for (const c of ChatRoomCharacter) {
-                if (c.Name.toLowerCase() === searchText || CharacterNickname(c).toLowerCase() === searchText) {
-                    return c;
+                const nickname = CharacterNickname(c).toLowerCase();
+                nicknameCounts[nickname] = (nicknameCounts[nickname] || 0) + 1;
+            }
+            
+            // First try exact full name matches
+            const exactMatches = [];
+            for (const c of ChatRoomCharacter) {
+                if (CharacterNickname(c).toLowerCase() === searchText) {
+                    exactMatches.push(c);
                 }
+            }
+            
+            // If multiple exact matches found, notify user to use member number
+            if (exactMatches.length > 1) {
+                ChatRoomSendLocal(`Multiple characters with the nickname "${input}" found. Please use their member number instead.`, 10000);
+                return null;
+            } else if (exactMatches.length === 1) {
+                return exactMatches[0];
             }
             
             // Try first name matches
+            const firstNameMatches = [];
             for (const c of ChatRoomCharacter) {
-                const firstName = c.Name.split(" ")[0]?.toLowerCase();
                 const nickFirstName = CharacterNickname(c).split(" ")[0]?.toLowerCase();
-                if (firstName === searchText || nickFirstName === searchText) {
-                    return c;
+                if (nickFirstName === searchText) {
+                    firstNameMatches.push(c);
                 }
             }
             
+            // If multiple first name matches found, notify user to use member number or full name
+            if (firstNameMatches.length > 1) {
+                ChatRoomSendLocal(`Multiple characters with the first name "${input}" found. Please use their full name or member number.`, 10000);
+                return null;
+            } else if (firstNameMatches.length === 1) {
+                return firstNameMatches[0];
+            }
+            
             // Try partial name matches
+            const partialMatches = [];
             for (const c of ChatRoomCharacter) {
-                if (c.Name.toLowerCase().includes(searchText) || CharacterNickname(c).toLowerCase().includes(searchText)) {
-                    return c;
+                if (CharacterNickname(c).toLowerCase().includes(searchText)) {
+                    partialMatches.push(c);
                 }
+            }
+            
+            // If multiple partial matches found, notify user to be more specific
+            if (partialMatches.length > 1) {
+                ChatRoomSendLocal(`Multiple characters with names containing "${input}" found. Please be more specific or use their member number.`, 10000);
+                return null;
+            } else if (partialMatches.length === 1) {
+                return partialMatches[0];
             }
             
             // No match found
@@ -2037,6 +2089,12 @@ function initMod() {
                         if (!targetCharacter) {
                             ChatRoomSendLocal("Player not found. Please check the name or member number and try again.");
                             return; // Exit the command without opening the outfit manager
+                        }
+                        
+                        // Check permissions - only allow if it's the player or they have AllowItem permission
+                        if (targetCharacter.MemberNumber !== Player.MemberNumber && !targetCharacter.AllowItem) {
+                            ChatRoomSendLocal("You don't have permission to interact with this player.");
+                            return; // Exit without opening outfit manager
                         }
                     }
                     
