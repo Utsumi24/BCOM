@@ -25,7 +25,8 @@ const VERSION_NUMBER = "0.7.5";
 - Saving outfits now saves the hairstyle as well
 - Added help text regarding the apply hair checkbox
 - Made the Outfit Manager's title to only use the player's nickname instead of the CurrentCharacter's name to avoid confusion
-- Changed the color of the version text to white for better visibility
+- Fixed outfit position preservation when overwriting outfits
+- Enhanced export mode to update BCX codes in real-time when hair preference changes
 
 ## v0.7.4.1
 - Fixed issue with sorting outfits.  Outfit sorting works as intended again.
@@ -385,6 +386,15 @@ function initMod() {
                 // Hair checkbox
                 if (MouseIn(1810, 367, 30, 30)) {
                     applyHairWithOutfit = !applyHairWithOutfit;
+                    
+                    // If in export mode, update the export code to reflect the hair preference
+                    if (isExportMode) {
+                        const importElement = document.getElementById("OutfitManagerImport");
+                        if (importElement) {
+                            // Regenerate the outfit code with the current hair preference
+                            importElement.value = getCurrentOutfitBCXCode(CurrentCharacter, applyHairWithOutfit);
+                        }
+                    }
                     return;
                 }
         
@@ -978,9 +988,9 @@ function initMod() {
             "  a new outfit",
             "• Saving with an existing name will prompt",
             "  you to overwrite the outfit",
-            "• Use the import button to import outfits",
+            "• Use the import button to import an outfit",
             "  from BCX codes",
-            "• Toggle 'Apply Hair' checkbox to include",
+            "• Toggle the 'Apply Hair' checkbox to include",
             "  hairstyles when applying an outfit"
         ];
 
@@ -1006,6 +1016,8 @@ function initMod() {
             "• Click 'Export' to copy your current",
             "  outfit's code to your clipboard",
             "• Outfits cannot be worn while in export mode",
+            "• The outfit code will change when the",
+            "  'Apply Hair' checkbox is checked/unchecked",
             "• Click 'Done' to exit export mode"
         ];
 
@@ -1042,7 +1054,7 @@ function initMod() {
 
             // If in export mode, fill with current outfit and disable editing
             if (isExportMode) {
-                const currentOutfitCode = getCurrentOutfitBCXCode(CurrentCharacter);
+                const currentOutfitCode = getCurrentOutfitBCXCode(CurrentCharacter, applyHairWithOutfit);
                 importElement.value = currentOutfitCode;
                 importElement.readOnly = true;
             } else {
@@ -1525,12 +1537,14 @@ function initMod() {
                         if (!confirm(`Outfit "${outfitName}" already exists in folder "${currentFolder}". Do you want to overwrite it?`)) {
                             return;
                         }
-                        // Remove the existing outfit
+                        
+                        // Find the existing outfit index (we'll use it later)
                         const existingIndex = outfitStorage.outfits.findIndex(o => 
                             o.name === outfitName && 
                             ((o.folder === currentFolder) || (!o.folder && currentFolder === "Main")));
-                        outfitStorage.outfits.splice(existingIndex, 1);
-                        ShowOutfitNotification(`Outfit "${outfitName}" has been overwritten`);
+                            
+                        // We'll use this index to overwrite the outfit in place
+                        var overwriteIndex = existingIndex;
                     } else {
                         // Outfit exists in different folder(s) - prevent saving with same name
                         const otherFolders = sameNameOutfits.map(o => o.folder || "Main").join(", ");
@@ -1539,6 +1553,8 @@ function initMod() {
                     }
                 } else {
                     ShowOutfitNotification(`Outfit "${outfitName}" has been saved to folder "${currentFolder}"`);
+                    // New outfit will be pushed to the array (no overwriteIndex)
+                    var overwriteIndex = -1;
                 }
 
                 // Convert appearance to BCX format outfit data
@@ -1568,12 +1584,22 @@ function initMod() {
                     return;
                 }
 
-                // Add the outfit with the current folder
-                outfitStorage.outfits.push({
+                // Create the outfit object
+                const newOutfit = {
                     name: outfitName,
                     folder: currentFolder,
                     data: LZString.compressToBase64(JSON.stringify(outfitData))
-                });
+                };
+                
+                // If overwriting, replace at same index; otherwise add to end
+                if (overwriteIndex >= 0) {
+                    outfitStorage.outfits[overwriteIndex] = newOutfit;                    
+                    ShowOutfitNotification(`Outfit "${outfitName}" has been overwritten`);
+                } else {
+                    // Add the outfit with the current folder
+                    outfitStorage.outfits.push(newOutfit);
+                    ShowOutfitNotification(`Outfit "${outfitName}" has been saved to folder "${currentFolder}"`);
+                }
 
                 // Save the outfitStorage object uncompressed
                 localStorage.setItem(storageKey, JSON.stringify(outfitStorage));
@@ -1682,11 +1708,20 @@ function initMod() {
         }
 
         // Add this helper function to get BCX code for a character's current outfit
-        function getCurrentOutfitBCXCode(C) {
+        function getCurrentOutfitBCXCode(C, includeHair = null) {
             try {
+                // Use the passed parameter if provided, otherwise use the global setting
+                const shouldIncludeHair = includeHair !== null ? includeHair : applyHairWithOutfit;
+                
                 const outfitData = C.Appearance
                     .filter(item => {
                         const group = item?.Asset?.Group;
+                        
+                        // Skip hair items if not including hair
+                        if (!shouldIncludeHair && (group?.Name === "HairFront" || group?.Name === "HairBack")) {
+                            return false;
+                        }
+                        
                         return group && (
                             group.Clothing || 
                             group.Name.includes("Item") || 
