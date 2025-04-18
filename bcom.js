@@ -22,7 +22,7 @@ const VERSION_NUMBER = "0.7.5.1";
 
 ## v0.7.5.1
 - Recreated the Outfit Manager button to use DOM elements so it can be clicked on over other DOM elements
-- Properly hide and restore the Pose and Expressions Menu when the Outfit Manager is opened or closed
+- Properly hide and restore the Pose, Expressions, and Owner Rules Menus when the Outfit Manager is opened or closed
 - Fixed dialog restoration when exiting the Outfit Manager due to DOM element integration
 
 ## v0.7.5
@@ -392,7 +392,11 @@ function initMod() {
                      #dialog-expression-preset,
                      #dialog-expression-preset-status,
                      #dialog-expression-preset-menubar,
-                     #dialog-expression-preset-button-grid {
+                     #dialog-expression-preset-button-grid,
+                     #dialog-owner-rules,
+                     #dialog-owner-rules-status,
+                     #dialog-owner-rules-menubar,
+                     #dialog-owner-rules-grid {
                          display: none !important;
                          visibility: hidden !important;
                          opacity: 0 !important;
@@ -427,7 +431,8 @@ function initMod() {
                      "dialog-inventory-icon", "dialog-inventory-paginate",
                      "dialog-pose", "dialog-pose-status", "dialog-pose-menubar", "dialog-pose-button-grid",
                      "dialog-expression-preset", "dialog-expression-preset-status", 
-                     "dialog-expression-preset-menubar", "dialog-expression-preset-button-grid"
+                     "dialog-expression-preset-menubar", "dialog-expression-preset-button-grid",
+                     "dialog-owner-rules", "dialog-owner-rules-status", "dialog-owner-rules-menubar", "dialog-owner-rules-grid"
                  ];
                  
                  hiddenElementIds.forEach(id => {
@@ -579,7 +584,8 @@ function initMod() {
                         "dialog-inventory-icon", "dialog-inventory-paginate",
                         "dialog-pose", "dialog-pose-status", "dialog-pose-menubar", "dialog-pose-button-grid",
                         "dialog-expression-preset", "dialog-expression-preset-status", 
-                        "dialog-expression-preset-menubar", "dialog-expression-preset-button-grid"
+                        "dialog-expression-preset-menubar", "dialog-expression-preset-button-grid",
+                        "dialog-owner-rules", "dialog-owner-rules-status", "dialog-owner-rules-menubar", "dialog-owner-rules-grid"
                     ];
                     
                     hiddenElementIds.forEach(id => {
@@ -2410,7 +2416,8 @@ function initMod() {
                     "dialog-inventory-icon", "dialog-inventory-paginate",
                     "dialog-pose", "dialog-pose-status", "dialog-pose-menubar", "dialog-pose-button-grid",
                     "dialog-expression-preset", "dialog-expression-preset-status", 
-                    "dialog-expression-preset-menubar", "dialog-expression-preset-button-grid"
+                    "dialog-expression-preset-menubar", "dialog-expression-preset-button-grid",
+                    "dialog-owner-rules", "dialog-owner-rules-status", "dialog-owner-rules-menubar", "dialog-owner-rules-grid"
                 ];
                 
                 hiddenElementIds.forEach(id => {
