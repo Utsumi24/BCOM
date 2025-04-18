@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         BC Outfit Manager
 // @namespace https://www.bondageprojects.com/
-// @version      0.7.5
+// @version      0.7.5.1
 // @description  Outfit management system for Bondage Club
 // @author       Utsumi
 // @match https://bondageprojects.elementfx.com/*
@@ -15,10 +15,15 @@
 
 var bcModSdk=function(){"use strict";const o="1.2.0";function e(o){alert("Mod ERROR:\n"+o);const e=new Error(o);throw console.error(e),e}const t=new TextEncoder;function n(o){return!!o&&"object"==typeof o&&!Array.isArray(o)}function r(o){const e=new Set;return o.filter((o=>!e.has(o)&&e.add(o)))}const i=new Map,a=new Set;function c(o){a.has(o)||(a.add(o),console.warn(o))}function s(o){const e=[],t=new Map,n=new Set;for(const r of f.values()){const i=r.patching.get(o.name);if(i){e.push(...i.hooks);for(const[e,a]of i.patches.entries())t.has(e)&&t.get(e)!==a&&c(`ModSDK: Mod '${r.name}' is patching function ${o.name} with same pattern that is already applied by different mod, but with different pattern:\nPattern:\n${e}\nPatch1:\n${t.get(e)||""}\nPatch2:\n${a}`),t.set(e,a),n.add(r.name)}}e.sort(((o,e)=>e.priority-o.priority));const r=function(o,e){if(0===e.size)return o;let t=o.toString().replaceAll("\r\n","\n");for(const[n,r]of e.entries())t.includes(n)||c(`ModSDK: Patching ${o.name}: Patch ${n} not applied`),t=t.replaceAll(n,r);return(0,eval)(`(${t})`)}(o.original,t);let i=function(e){var t,i;const a=null===(i=(t=m.errorReporterHooks).hookChainExit)||void 0===i?void 0:i.call(t,o.name,n),c=r.apply(this,e);return null==a||a(),c};for(let t=e.length-1;t>=0;t--){const n=e[t],r=i;i=function(e){var t,i;const a=null===(i=(t=m.errorReporterHooks).hookEnter)||void 0===i?void 0:i.call(t,o.name,n.mod),c=n.hook.apply(this,[e,o=>{if(1!==arguments.length||!Array.isArray(e))throw new Error(`Mod ${n.mod} failed to call next hook: Expected args to be array, got ${typeof o}`);return r.call(this,o)}]);return null==a||a(),c}}return{hooks:e,patches:t,patchesSources:n,enter:i,final:r}}function l(o,e=!1){let r=i.get(o);if(r)e&&(r.precomputed=s(r));else{let e=window;const a=o.split(".");for(let t=0;t<a.length-1;t++)if(e=e[a[t]],!n(e))throw new Error(`ModSDK: Function ${o} to be patched not found; ${a.slice(0,t+1).join(".")} is not object`);const c=e[a[a.length-1]];if("function"!=typeof c)throw new Error(`ModSDK: Function ${o} to be patched not found`);const l=function(o){let e=-1;for(const n of t.encode(o)){let o=255&(e^n);for(let e=0;e<8;e++)o=1&o?-306674912^o>>>1:o>>>1;e=e>>>8^o}return((-1^e)>>>0).toString(16).padStart(8,"0").toUpperCase()}(c.toString().replaceAll("\r\n","\n")),d={name:o,original:c,originalHash:l};r=Object.assign(Object.assign({},d),{precomputed:s(d),router:()=>{},context:e,contextProperty:a[a.length-1]}),r.router=function(o){return function(...e){return o.precomputed.enter.apply(this,[e])}}(r),i.set(o,r),e[r.contextProperty]=r.router}return r}function d(){for(const o of i.values())o.precomputed=s(o)}function p(){const o=new Map;for(const[e,t]of i)o.set(e,{name:e,original:t.original,originalHash:t.originalHash,sdkEntrypoint:t.router,currentEntrypoint:t.context[t.contextProperty],hookedByMods:r(t.precomputed.hooks.map((o=>o.mod))),patchedByMods:Array.from(t.precomputed.patchesSources)});return o}const f=new Map;function u(o){f.get(o.name)!==o&&e(`Failed to unload mod '${o.name}': Not registered`),f.delete(o.name),o.loaded=!1,d()}function g(o,t){o&&"object"==typeof o||e("Failed to register mod: Expected info object, got "+typeof o),"string"==typeof o.name&&o.name||e("Failed to register mod: Expected name to be non-empty string, got "+typeof o.name);let r=`'${o.name}'`;"string"==typeof o.fullName&&o.fullName||e(`Failed to register mod ${r}: Expected fullName to be non-empty string, got ${typeof o.fullName}`),r=`'${o.fullName} (${o.name})'`,"string"!=typeof o.version&&e(`Failed to register mod ${r}: Expected version to be string, got ${typeof o.version}`),o.repository||(o.repository=void 0),void 0!==o.repository&&"string"!=typeof o.repository&&e(`Failed to register mod ${r}: Expected repository to be undefined or string, got ${typeof o.version}`),null==t&&(t={}),t&&"object"==typeof t||e(`Failed to register mod ${r}: Expected options to be undefined or object, got ${typeof t}`);const i=!0===t.allowReplace,a=f.get(o.name);a&&(a.allowReplace&&i||e(`Refusing to load mod ${r}: it is already loaded and doesn't allow being replaced.\nWas the mod loaded multiple times?`),u(a));const c=o=>{let e=g.patching.get(o.name);return e||(e={hooks:[],patches:new Map},g.patching.set(o.name,e)),e},s=(o,t)=>(...n)=>{var i,a;const c=null===(a=(i=m.errorReporterHooks).apiEndpointEnter)||void 0===a?void 0:a.call(i,o,g.name);g.loaded||e(`Mod ${r} attempted to call SDK function after being unloaded`);const s=t(...n);return null==c||c(),s},p={unload:s("unload",(()=>u(g))),hookFunction:s("hookFunction",((o,t,n)=>{"string"==typeof o&&o||e(`Mod ${r} failed to patch a function: Expected function name string, got ${typeof o}`);const i=l(o),a=c(i);"number"!=typeof t&&e(`Mod ${r} failed to hook function '${o}': Expected priority number, got ${typeof t}`),"function"!=typeof n&&e(`Mod ${r} failed to hook function '${o}': Expected hook function, got ${typeof n}`);const s={mod:g.name,priority:t,hook:n};return a.hooks.push(s),d(),()=>{const o=a.hooks.indexOf(s);o>=0&&(a.hooks.splice(o,1),d())}})),patchFunction:s("patchFunction",((o,t)=>{"string"==typeof o&&o||e(`Mod ${r} failed to patch a function: Expected function name string, got ${typeof o}`);const i=l(o),a=c(i);n(t)||e(`Mod ${r} failed to patch function '${o}': Expected patches object, got ${typeof t}`);for(const[n,i]of Object.entries(t))"string"==typeof i?a.patches.set(n,i):null===i?a.patches.delete(n):e(`Mod ${r} failed to patch function '${o}': Invalid format of patch '${n}'`);d()})),removePatches:s("removePatches",(o=>{"string"==typeof o&&o||e(`Mod ${r} failed to patch a function: Expected function name string, got ${typeof o}`);const t=l(o);c(t).patches.clear(),d()})),callOriginal:s("callOriginal",((o,t,n)=>{"string"==typeof o&&o||e(`Mod ${r} failed to call a function: Expected function name string, got ${typeof o}`);const i=l(o);return Array.isArray(t)||e(`Mod ${r} failed to call a function: Expected args array, got ${typeof t}`),i.original.apply(null!=n?n:globalThis,t)})),getOriginalHash:s("getOriginalHash",(o=>{"string"==typeof o&&o||e(`Mod ${r} failed to get hash: Expected function name string, got ${typeof o}`);return l(o).originalHash}))},g={name:o.name,fullName:o.fullName,version:o.version,repository:o.repository,allowReplace:i,api:p,loaded:!0,patching:new Map};return f.set(o.name,g),Object.freeze(p)}function h(){const o=[];for(const e of f.values())o.push({name:e.name,fullName:e.fullName,version:e.version,repository:e.repository});return o}let m;const y=void 0===window.bcModSdk?window.bcModSdk=function(){const e={version:o,apiVersion:1,registerMod:g,getModsInfo:h,getPatchingInfo:p,errorReporterHooks:Object.seal({apiEndpointEnter:null,hookEnter:null,hookChainExit:null})};return m=e,Object.freeze(e)}():(n(window.bcModSdk)||e("Failed to init Mod SDK: Name already in use"),1!==window.bcModSdk.apiVersion&&e(`Failed to init Mod SDK: Different version already loaded ('1.2.0' vs '${window.bcModSdk.version}')`),window.bcModSdk.version!==o&&alert(`Mod SDK warning: Loading different but compatible versions ('1.2.0' vs '${window.bcModSdk.version}')\nOne of mods you are using is using an old version of SDK. It will work for now but please inform author to update`),window.bcModSdk);return"undefined"!=typeof exports&&(Object.defineProperty(exports,"__esModule",{value:!0}),exports.default=y),y}();
 
-const VERSION_NUMBER = "0.7.5";
+const VERSION_NUMBER = "0.7.5.1";
 
 /*
 # BC Outfit Manager Changelog
+
+## v0.7.5.1
+- Recreated the Outfit Manager button to use DOM elements so it can be clicked on over other DOM elements
+- Properly hide and restore the Pose and Expressions Menu when the Outfit Manager is opened or closed
+- Fixed dialog restoration when exiting the Outfit Manager due to DOM element integration
 
 ## v0.7.5
 - Added a checkbox to apply hairstyles when wearing an outfit
@@ -269,35 +274,179 @@ function initMod() {
 
         // Update drawing code
         modApi.hookFunction("DialogDraw", 0, (args, next) => {
-            if (DialogMenuMode === "items" || DialogMenuMode === "dialog") {
+            if ((DialogMenuMode === "items" || DialogMenuMode === "dialog") && !document.getElementById("OutfitManagerButton")) {
                 // Check if we have permission to modify the character's outfit
                 const hasPermission = CurrentCharacter.MemberNumber === Player.MemberNumber || CurrentCharacter.AllowItem;
                 
-                DrawButton(
-                    OUTFIT_BUTTON_X,
-                    905,
-                    BUTTON_SIZE,
-                    BUTTON_SIZE,
-                    "",
-                    hasPermission ? "White" : "Pink",
-                    "",
-                    hasPermission ? "Outfit Manager" : "You don't have permission to interact with this player"
+                // Find dialog panel or create one if it doesn't exist yet
+                let dialogElement = document.getElementById("dialog-button-container");
+                if (!dialogElement) {
+                    // Find main dialog element 
+                    dialogElement = document.getElementById("dialog") || document.body;
+                }
+                
+                // Create a proper DOM button for the outfit manager using the game's own button system
+                const buttonX = 5; // Position to the left of speech bubble
+                const buttonY = 905; // Standard position at bottom
+                
+                // Use the game's native button creation function
+                const buttonContainer = ElementButton.Create(
+                    "OutfitManagerButton", 
+                    function() {
+                        if (hasPermission) {
+                            // Store current mode before switching
+                            PreviousDialogMode = DialogMenuMode; 
+                            
+                            // Switch to outfits mode
+                            DialogChangeMode("outfits");
+                            DialogMenuButton = [];
+                            
+                            // Clean up button when entering outfit mode
+                            const button = document.getElementById("OutfitManagerButton");
+                            if (button) {
+                                window.removeEventListener("resize", updatePositionFunction);
+                                button.remove();
+                            }
+                        } else {
+                            ShowOutfitNotification("You don't have permission to interact with this player");
+                        }
+                    },
+                    {
+                        image: "Icons/Dress.png",
+                        labelPosition: "bottom",
+                        tooltipPosition: "right",
+                        tooltip: hasPermission ? "Outfit Manager" : "You don't have permission to interact with this player",
+                    }
                 );
-                DrawImageResize("Icons/Dress.png",
-                    OUTFIT_BUTTON_X + 5,
-                    910,
-                    50,
-                    50
-                );
-            }
+                
+                // Add hover effects to match the game's standard button behavior
+                buttonContainer.addEventListener("mouseenter", () => {
+                    buttonContainer.style.backgroundColor = hasPermission ? "cyan" : "pink";
+                });
+                
+                buttonContainer.addEventListener("mouseleave", () => {
+                    buttonContainer.style.backgroundColor = hasPermission ? "white" : "pink";
+                });
+                
+                // Set initial background color based on permission
+                buttonContainer.style.backgroundColor = hasPermission ? "white" : "pink";
+                
+                // Position the button using ElementPositionFixed
+                ElementPositionFixed(buttonContainer, buttonX, buttonY, BUTTON_SIZE, BUTTON_SIZE);
+                
+                // Set a high z-index to ensure button is always on top of other dialog elements
+                buttonContainer.style.zIndex = "2000";
+                buttonContainer.style.position = "absolute";
+                
+                // Create a single function reference for position updates
+                const updatePositionFunction = () => {
+                    ElementPositionFixed(buttonContainer, buttonX, buttonY, BUTTON_SIZE, BUTTON_SIZE);
+                    // Ensure z-index is maintained after repositioning
+                    buttonContainer.style.zIndex = "2000";
+                };
+                
+                // Add resize listener
+                window.addEventListener("resize", updatePositionFunction);
+                
+                // Save the original remove method to ensure we clean up event listeners
+                const originalRemove = buttonContainer.remove;
+                buttonContainer.remove = function() {
+                    window.removeEventListener("resize", updatePositionFunction);
+                    originalRemove.apply(this);
+                };
+                
+                // Add to DOM
+                dialogElement.appendChild(buttonContainer);
+                
+                // Use ElementPositionFixed after adding to DOM
+                ElementPositionFixed(buttonContainer, buttonX, buttonY, BUTTON_SIZE, BUTTON_SIZE);
+             }
 
-            if (DialogMenuMode === "outfits") {
-                DrawOutfitMenu();
-                return;
-            }
+             if (DialogMenuMode === "outfits") {
+                 // Create a style element to handle DOM dialog elements only
+                 let hideDialogStyle = document.getElementById("outfit-manager-style");
+                 if (!hideDialogStyle) {
+                     hideDialogStyle = document.createElement("style");
+                     hideDialogStyle.id = "outfit-manager-style";
+                     document.head.appendChild(hideDialogStyle);
+                 }
+                 
+                 // Add CSS rules to hide DOM-based dialogs only
+                 hideDialogStyle.textContent = `
+                     /* Hide dialog DOM elements except our own */
+                     #dialog-expression, 
+                     #dialog-inventory, 
+                     .dialog-character-container, 
+                     .dialog-character, 
+                     .dialog-character-zone,
+                     .character-label,
+                     #dialog-crafting-container,
+                     #dialog-permission,
+                     #dialog-locking,
+                     #dialog-activities,
+                     #dialog-saved-expressions,
+                     #dialog-pose,
+                     #dialog-pose-status,
+                     #dialog-pose-menubar,
+                     #dialog-pose-button-grid,
+                     #dialog-expression-preset,
+                     #dialog-expression-preset-status,
+                     #dialog-expression-preset-menubar,
+                     #dialog-expression-preset-button-grid {
+                         display: none !important;
+                         visibility: hidden !important;
+                         opacity: 0 !important;
+                         pointer-events: none !important;
+                     }
+                     
+                     /* Ensure the outfit button isn't blocked by expression menus */
+                     #dialog-expression-preset-button-grid,
+                     .dialog-expression-preset-slot,
+                     #dialog-expression-preset {
+                         pointer-events: none !important;
+                         z-index: 1 !important;
+                     }
+                     
+                     /* Ensure our outfit menu is on top */
+                     #dialog-outfit-manager {
+                         z-index: 1000 !important;
+                     }
+                     
+                     /* Ensure our Outfit Manager button is always clickable */
+                     #OutfitManagerButton {
+                         z-index: 2000 !important;
+                         pointer-events: auto !important;
+                     }
+                 `;
+                 
+                 // Also hide specific elements by ID
+                 const hiddenElementIds = [
+                     "dialog-expression", "dialog-expression-status", "dialog-expression-menubar", 
+                     "dialog-expression-menu-left", "dialog-expression-button-grid",
+                     "dialog-inventory", "dialog-inventory-status", "dialog-inventory-grid", 
+                     "dialog-inventory-icon", "dialog-inventory-paginate",
+                     "dialog-pose", "dialog-pose-status", "dialog-pose-menubar", "dialog-pose-button-grid",
+                     "dialog-expression-preset", "dialog-expression-preset-status", 
+                     "dialog-expression-preset-menubar", "dialog-expression-preset-button-grid"
+                 ];
+                 
+                 hiddenElementIds.forEach(id => {
+                     const element = document.getElementById(id);
+                     if (element) element.style.display = "none";
+                 });
+                 
+                 DrawOutfitMenu();
+                 return;
+             } else {
+                 // Remove the style element if not in outfit mode
+                 const hideDialogStyle = document.getElementById("outfit-manager-style");
+                 if (hideDialogStyle) {
+                     hideDialogStyle.remove();
+                 }
+             }
 
-            return next(args);
-        });
+             return next(args);
+          });
 
         // Update click handling
         modApi.hookFunction("DialogClick", 0, (args, next) => {
@@ -398,25 +547,83 @@ function initMod() {
                     return;
                 }
         
-                // Back button with matching coordinates
+                // Exit button with matching coordinates
                 if (MouseIn(1885, 15, 90, 90)) {
-                    // Reset all modes when exiting Outfit Manager
+                    console.log("Exit button clicked in Outfit Manager");
+                    
+                    // Reset all outfit manager modes before calling DialogMenuBack
                     isSortMode = false;
                     isExportMode = false;
                     isFolderManagementMode = false;
                     selectedOutfits = [];
                     
-                    // Clear import field if it exists
-                    const importElement = document.getElementById("OutfitManagerImport");
-                    if (importElement) importElement.value = "";
+                    // Remove the style element that hides dialog elements
+                    const styleElement = document.getElementById("outfit-manager-style");
+                    if (styleElement) {
+                        styleElement.remove();
+                        //console.log("Exit button: Removed style element that was hiding dialog elements");
+                    }
                     
-                    // Add failsafe for PreviousDialogMode
-                    if (!PreviousDialogMode) {
+                    // Make sure all other outfit manager DOM elements are also removed
+                    const outfitManager = document.getElementById("dialog-outfit-manager");
+                    if (outfitManager) {
+                        outfitManager.remove();
+                        //console.log("Exit button: Removed outfit manager dialog container");
+                    }
+                    
+                    // Restore visibility to all specifically hidden elements
+                    const hiddenElementIds = [
+                        "dialog-expression", "dialog-expression-status", "dialog-expression-menubar", 
+                        "dialog-expression-menu-left", "dialog-expression-button-grid",
+                        "dialog-inventory", "dialog-inventory-status", "dialog-inventory-grid", 
+                        "dialog-inventory-icon", "dialog-inventory-paginate",
+                        "dialog-pose", "dialog-pose-status", "dialog-pose-menubar", "dialog-pose-button-grid",
+                        "dialog-expression-preset", "dialog-expression-preset-status", 
+                        "dialog-expression-preset-menubar", "dialog-expression-preset-button-grid"
+                    ];
+                    
+                    hiddenElementIds.forEach(id => {
+                        const element = document.getElementById(id);
+                        if (element) {
+                            element.style.display = "";
+                            element.style.visibility = "";
+                            element.style.opacity = "";
+                            element.style.pointerEvents = "";
+                        }
+                    });
+                    
+                    // Make sure PreviousDialogMode isn't blank
+                    if (!PreviousDialogMode || PreviousDialogMode === "") {
                         PreviousDialogMode = "dialog";
                     }
-                    DialogChangeMode(PreviousDialogMode);
+                    
+                    // Set target mode to the previous dialog mode
+                    DialogMenuMode = PreviousDialogMode;
+                    
+                    // Force clean change to previous dialog mode
+                    if (typeof DialogChangeMode === "function") {
+                        DialogChangeMode(PreviousDialogMode, true);
+                        //console.log(`Exit button: Forced DialogChangeMode to ${PreviousDialogMode}`);
+                    }
+                    
+                    // Remove the import field last to ensure a clean exit
+                    const importElement = document.getElementById("OutfitManagerImport");
+                    if (importElement) {
+                        importElement.remove();
+                        //console.log("Exit button: Removed import field");
+                    }
+                    
+                    // Check for any additional containers that might exist
+                    ["OutfitManagerImportContainer", "OutfitExportField", "ImportExportContainer"].forEach(id => {
+                        const element = document.getElementById(id);
+                        if (element) {
+                            element.remove();
+                           //console.log(`Exit button: Removed additional container ${id}`);
+                        }
+                    });
+                    
                     return;
-                }                
+                }
         
                 // Save button
                 if (MouseIn(1250, 110, 400, 60)) {
@@ -848,22 +1055,13 @@ function initMod() {
             return next(args);
         });
 
-        modApi.hookFunction("DialogClickPoseMenu", 0, (args, next) => {
-            if (DialogMenuMode === "outfits") return;
-            return next(args);
-        });
-
-        modApi.hookFunction("DialogClickExpressionMenu", 0, (args, next) => {
-            if (DialogMenuMode === "outfits") return;
-            return next(args);
-        });
-
         modApi.hookFunction("DialogChangeMode", 4, (args, next) => {
             const [mode, reset] = args;
             
             if (mode === "outfits") {
                 // Store the mode we're coming from
                 PreviousDialogMode = DialogMenuMode;
+                console.log("Storing previous mode:", DialogMenuMode);
                 
                 // Handle the mode change ourselves
                 DialogMenuMapping[DialogMenuMode]?.Unload();
@@ -883,6 +1081,27 @@ function initMod() {
                 if (importElement) {
                     importElement.remove();
                 }
+                
+                // Make sure DOM elements are visible again
+                setTimeout(() => {
+                    // Restore any DOM elements that might have been hidden
+                    const selectors = [
+                        "#dialog-expression", "#dialog-inventory", 
+                        ".dialog-character-container", ".dialog-character", 
+                        ".dialog-character-zone", ".character-label"
+                    ];
+                    
+                    selectors.forEach(selector => {
+                        const elements = document.querySelectorAll(selector);
+                        elements.forEach(element => {
+                            if (element) {
+                                element.style.display = "";
+                                element.style.visibility = "";
+                                element.style.opacity = "";
+                            }
+                        });
+                    });
+                }, 100);
             }
             
             return next(args);
@@ -1754,17 +1973,6 @@ function initMod() {
                 ChatRoomName: null
             };
         }
-
-        // Add cleanup for import box when dialog closes
-        modApi.hookFunction("DialogLeave", 0, (args, next) => {
-            // Clean up import box if it exists
-            const importElement = document.getElementById("OutfitManagerImport");
-            if (importElement) {
-                importElement.remove();
-            }
-            
-            return next(args);
-        });
         
         // Inside initMod function, after other function definitions
         function saveOutfits(outfits) {
@@ -2148,6 +2356,121 @@ function initMod() {
             return null;
         }
 
+        // Clean up DOM button when leaving dialog
+        modApi.hookFunction("DialogLeave", 0, (args, next) => {
+            // Remove our button from DOM if it exists
+            const outfitButton = document.getElementById("OutfitManagerButton");
+            if (outfitButton) outfitButton.remove();
+            
+            // Make sure PreviousDialogMode isn't blank
+            if (!PreviousDialogMode || PreviousDialogMode === "") {
+                PreviousDialogMode = "dialog";
+            }
+
+            const importElement = document.getElementById("OutfitManagerImport");
+            if (importElement) {
+                importElement.remove();
+            }
+            
+            // Call original function
+            return next(args);
+        });
+
+        // Add a hook for DialogMenuBack to properly handle exiting from outfits mode
+        modApi.hookFunction("DialogMenuBack", 5, (args, next) => {
+            // Check if we're in outfits mode before the original function runs
+            if (DialogMenuMode === "outfits") {
+                console.log("DialogMenuBack: Exiting Outfit Manager via BackMenu");
+                
+                // Reset all outfit manager modes
+                isSortMode = false;
+                isExportMode = false;
+                isFolderManagementMode = false;
+                selectedOutfits = [];
+                
+                // Remove our style element that hides dialog elements
+                const styleElement = document.getElementById("outfit-manager-style");
+                if (styleElement) {
+                    styleElement.remove();
+                    console.log("DialogMenuBack: Removed style element that was hiding dialog elements");
+                }
+                
+                // Make sure all other outfit manager DOM elements are also removed
+                const outfitManager = document.getElementById("dialog-outfit-manager");
+                if (outfitManager) {
+                    outfitManager.remove();
+                    console.log("DialogMenuBack: Removed outfit manager dialog container");
+                }
+                
+                // Restore visibility to all specifically hidden elements
+                const hiddenElementIds = [
+                    "dialog-expression", "dialog-expression-status", "dialog-expression-menubar", 
+                    "dialog-expression-menu-left", "dialog-expression-button-grid",
+                    "dialog-inventory", "dialog-inventory-status", "dialog-inventory-grid", 
+                    "dialog-inventory-icon", "dialog-inventory-paginate",
+                    "dialog-pose", "dialog-pose-status", "dialog-pose-menubar", "dialog-pose-button-grid",
+                    "dialog-expression-preset", "dialog-expression-preset-status", 
+                    "dialog-expression-preset-menubar", "dialog-expression-preset-button-grid"
+                ];
+                
+                hiddenElementIds.forEach(id => {
+                    const element = document.getElementById(id);
+                    if (element) {
+                        element.style.display = "";
+                        element.style.visibility = "";
+                        element.style.opacity = "";
+                        element.style.pointerEvents = "";
+                    }
+                });
+                
+                // Add failsafe for PreviousDialogMode
+                if (!PreviousDialogMode) {
+                    PreviousDialogMode = "dialog";
+                }
+                
+                // Set DialogMenuMode to previous mode for the original function to handle
+                DialogMenuMode = PreviousDialogMode;
+                console.log(`DialogMenuBack: Set DialogMenuMode to ${PreviousDialogMode}`);
+                
+                // Properly remove the import field if it exists
+                const importElement = document.getElementById("OutfitManagerImport");
+                if (importElement) {
+                    importElement.remove();
+                    console.log("DialogMenuBack: Removed import field");
+                }
+            }
+            
+            // Run the original function
+            return next(args);
+        });
+
+        // Add a hook to prevent duplicate character drawing in outfit mode
+        modApi.hookFunction("DrawCharacter", 5, (args, next) => {
+            const [C, X, Y, Zoom, IsHeightResizeAllowed, IsInScreen, IsHeightRatio, drawCanvas, drawCanvasBlink, AlphaMasks, drawCanvasInverted] = args;
+            
+            // When in outfit mode, control what characters get drawn 
+            if (DialogMenuMode === "outfits") {
+                // The coordinates that indicate a character in the dialog position (left side)
+                const isDialogCharacter = (X >= 50 && X <= 700 && Y >= 0 && Y <= 1000);
+                
+                // If in outfit mode and this is a character in the dialog position
+                if (isDialogCharacter) {
+                    // Our displayChar in DrawOutfitMenu is drawn at X=500, so we can allow that exact position
+                    // while preventing other characters from being drawn in the dialog area
+                    if (X === 500 && Y === 0) {
+                        // This is our displayChar in the outfit menu, allow it to draw
+                        return next(args);
+                    } else {
+                        // Skip drawing any other characters in the dialog position
+                        return; // Important: return without calling next() prevents drawing
+                    }
+                }
+            }
+            
+            // For all other cases, proceed with normal drawing
+            return next(args);
+        });
+    
         CommandCombine([
             {
                 Tag: "bcom",
@@ -2190,6 +2513,8 @@ function initMod() {
     } catch (error) {
         console.error('OutfitManager failed:', error);
     }
+
+    
 }
 
 if (window.bcModSdk?.registerMod) {
