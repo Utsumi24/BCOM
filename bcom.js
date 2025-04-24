@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         BC Outfit Manager
 // @namespace https://www.bondageprojects.com/
-// @version      0.7.5.1
+// @version      0.7.6
 // @description  Outfit management system for Bondage Club
 // @author       Utsumi
 // @match https://bondageprojects.elementfx.com/*
@@ -15,10 +15,19 @@
 
 var bcModSdk=function(){"use strict";const o="1.2.0";function e(o){alert("Mod ERROR:\n"+o);const e=new Error(o);throw console.error(e),e}const t=new TextEncoder;function n(o){return!!o&&"object"==typeof o&&!Array.isArray(o)}function r(o){const e=new Set;return o.filter((o=>!e.has(o)&&e.add(o)))}const i=new Map,a=new Set;function c(o){a.has(o)||(a.add(o),console.warn(o))}function s(o){const e=[],t=new Map,n=new Set;for(const r of f.values()){const i=r.patching.get(o.name);if(i){e.push(...i.hooks);for(const[e,a]of i.patches.entries())t.has(e)&&t.get(e)!==a&&c(`ModSDK: Mod '${r.name}' is patching function ${o.name} with same pattern that is already applied by different mod, but with different pattern:\nPattern:\n${e}\nPatch1:\n${t.get(e)||""}\nPatch2:\n${a}`),t.set(e,a),n.add(r.name)}}e.sort(((o,e)=>e.priority-o.priority));const r=function(o,e){if(0===e.size)return o;let t=o.toString().replaceAll("\r\n","\n");for(const[n,r]of e.entries())t.includes(n)||c(`ModSDK: Patching ${o.name}: Patch ${n} not applied`),t=t.replaceAll(n,r);return(0,eval)(`(${t})`)}(o.original,t);let i=function(e){var t,i;const a=null===(i=(t=m.errorReporterHooks).hookChainExit)||void 0===i?void 0:i.call(t,o.name,n),c=r.apply(this,e);return null==a||a(),c};for(let t=e.length-1;t>=0;t--){const n=e[t],r=i;i=function(e){var t,i;const a=null===(i=(t=m.errorReporterHooks).hookEnter)||void 0===i?void 0:i.call(t,o.name,n.mod),c=n.hook.apply(this,[e,o=>{if(1!==arguments.length||!Array.isArray(e))throw new Error(`Mod ${n.mod} failed to call next hook: Expected args to be array, got ${typeof o}`);return r.call(this,o)}]);return null==a||a(),c}}return{hooks:e,patches:t,patchesSources:n,enter:i,final:r}}function l(o,e=!1){let r=i.get(o);if(r)e&&(r.precomputed=s(r));else{let e=window;const a=o.split(".");for(let t=0;t<a.length-1;t++)if(e=e[a[t]],!n(e))throw new Error(`ModSDK: Function ${o} to be patched not found; ${a.slice(0,t+1).join(".")} is not object`);const c=e[a[a.length-1]];if("function"!=typeof c)throw new Error(`ModSDK: Function ${o} to be patched not found`);const l=function(o){let e=-1;for(const n of t.encode(o)){let o=255&(e^n);for(let e=0;e<8;e++)o=1&o?-306674912^o>>>1:o>>>1;e=e>>>8^o}return((-1^e)>>>0).toString(16).padStart(8,"0").toUpperCase()}(c.toString().replaceAll("\r\n","\n")),d={name:o,original:c,originalHash:l};r=Object.assign(Object.assign({},d),{precomputed:s(d),router:()=>{},context:e,contextProperty:a[a.length-1]}),r.router=function(o){return function(...e){return o.precomputed.enter.apply(this,[e])}}(r),i.set(o,r),e[r.contextProperty]=r.router}return r}function d(){for(const o of i.values())o.precomputed=s(o)}function p(){const o=new Map;for(const[e,t]of i)o.set(e,{name:e,original:t.original,originalHash:t.originalHash,sdkEntrypoint:t.router,currentEntrypoint:t.context[t.contextProperty],hookedByMods:r(t.precomputed.hooks.map((o=>o.mod))),patchedByMods:Array.from(t.precomputed.patchesSources)});return o}const f=new Map;function u(o){f.get(o.name)!==o&&e(`Failed to unload mod '${o.name}': Not registered`),f.delete(o.name),o.loaded=!1,d()}function g(o,t){o&&"object"==typeof o||e("Failed to register mod: Expected info object, got "+typeof o),"string"==typeof o.name&&o.name||e("Failed to register mod: Expected name to be non-empty string, got "+typeof o.name);let r=`'${o.name}'`;"string"==typeof o.fullName&&o.fullName||e(`Failed to register mod ${r}: Expected fullName to be non-empty string, got ${typeof o.fullName}`),r=`'${o.fullName} (${o.name})'`,"string"!=typeof o.version&&e(`Failed to register mod ${r}: Expected version to be string, got ${typeof o.version}`),o.repository||(o.repository=void 0),void 0!==o.repository&&"string"!=typeof o.repository&&e(`Failed to register mod ${r}: Expected repository to be undefined or string, got ${typeof o.version}`),null==t&&(t={}),t&&"object"==typeof t||e(`Failed to register mod ${r}: Expected options to be undefined or object, got ${typeof t}`);const i=!0===t.allowReplace,a=f.get(o.name);a&&(a.allowReplace&&i||e(`Refusing to load mod ${r}: it is already loaded and doesn't allow being replaced.\nWas the mod loaded multiple times?`),u(a));const c=o=>{let e=g.patching.get(o.name);return e||(e={hooks:[],patches:new Map},g.patching.set(o.name,e)),e},s=(o,t)=>(...n)=>{var i,a;const c=null===(a=(i=m.errorReporterHooks).apiEndpointEnter)||void 0===a?void 0:a.call(i,o,g.name);g.loaded||e(`Mod ${r} attempted to call SDK function after being unloaded`);const s=t(...n);return null==c||c(),s},p={unload:s("unload",(()=>u(g))),hookFunction:s("hookFunction",((o,t,n)=>{"string"==typeof o&&o||e(`Mod ${r} failed to patch a function: Expected function name string, got ${typeof o}`);const i=l(o),a=c(i);"number"!=typeof t&&e(`Mod ${r} failed to hook function '${o}': Expected priority number, got ${typeof t}`),"function"!=typeof n&&e(`Mod ${r} failed to hook function '${o}': Expected hook function, got ${typeof n}`);const s={mod:g.name,priority:t,hook:n};return a.hooks.push(s),d(),()=>{const o=a.hooks.indexOf(s);o>=0&&(a.hooks.splice(o,1),d())}})),patchFunction:s("patchFunction",((o,t)=>{"string"==typeof o&&o||e(`Mod ${r} failed to patch a function: Expected function name string, got ${typeof o}`);const i=l(o),a=c(i);n(t)||e(`Mod ${r} failed to patch function '${o}': Expected patches object, got ${typeof t}`);for(const[n,i]of Object.entries(t))"string"==typeof i?a.patches.set(n,i):null===i?a.patches.delete(n):e(`Mod ${r} failed to patch function '${o}': Invalid format of patch '${n}'`);d()})),removePatches:s("removePatches",(o=>{"string"==typeof o&&o||e(`Mod ${r} failed to patch a function: Expected function name string, got ${typeof o}`);const t=l(o);c(t).patches.clear(),d()})),callOriginal:s("callOriginal",((o,t,n)=>{"string"==typeof o&&o||e(`Mod ${r} failed to call a function: Expected function name string, got ${typeof o}`);const i=l(o);return Array.isArray(t)||e(`Mod ${r} failed to call a function: Expected args array, got ${typeof t}`),i.original.apply(null!=n?n:globalThis,t)})),getOriginalHash:s("getOriginalHash",(o=>{"string"==typeof o&&o||e(`Mod ${r} failed to get hash: Expected function name string, got ${typeof o}`);return l(o).originalHash}))},g={name:o.name,fullName:o.fullName,version:o.version,repository:o.repository,allowReplace:i,api:p,loaded:!0,patching:new Map};return f.set(o.name,g),Object.freeze(p)}function h(){const o=[];for(const e of f.values())o.push({name:e.name,fullName:e.fullName,version:e.version,repository:e.repository});return o}let m;const y=void 0===window.bcModSdk?window.bcModSdk=function(){const e={version:o,apiVersion:1,registerMod:g,getModsInfo:h,getPatchingInfo:p,errorReporterHooks:Object.seal({apiEndpointEnter:null,hookEnter:null,hookChainExit:null})};return m=e,Object.freeze(e)}():(n(window.bcModSdk)||e("Failed to init Mod SDK: Name already in use"),1!==window.bcModSdk.apiVersion&&e(`Failed to init Mod SDK: Different version already loaded ('1.2.0' vs '${window.bcModSdk.version}')`),window.bcModSdk.version!==o&&alert(`Mod SDK warning: Loading different but compatible versions ('1.2.0' vs '${window.bcModSdk.version}')\nOne of mods you are using is using an old version of SDK. It will work for now but please inform author to update`),window.bcModSdk);return"undefined"!=typeof exports&&(Object.defineProperty(exports,"__esModule",{value:!0}),exports.default=y),y}();
 
-const VERSION_NUMBER = "0.7.5.1";
+const VERSION_NUMBER = "0.7.6";
 
 /*
 # BC Outfit Manager Changelog
+
+## v0.7.6
+- Added a "Hair Only" checkbox to the outfit manager to allow players to save only hairstyles as outfits and to only apply hairstyles instead of the entire outfit
+- Added help text to explain the Hair Only checkbox
+- The help text will not change to show locked items if the Hair Only checkbox is checked
+- Added a ✂️ icon to denote "Hair Only" outfits
+- Changed how BCX importing works to instead pass the imported outfit into the saveOutfit function instead of using its own saving method
+- Altered how the BCX export code is generated to only export hair if the Hair Only checkbox is checked
+- Added a check when importing a BCX code to check if it only contains hair, and if so, it will import it as a hair only outfit
 
 ## v0.7.5.1
 - Recreated the Outfit Manager button to use DOM elements so it can be clicked on over other DOM elements
@@ -258,6 +267,9 @@ function initMod() {
 
         // Controls whether to apply hair when wearing outfits
         let applyHairWithOutfit = false;
+
+        // Controls whether to only apply hair, ignoring other items
+        let hairOnly = false;
 
         const STORAGE_PREFIX = "OutfitManager_"; // Prefix for storing outfits
         const OUTFITS_PER_PAGE = 8;  // Number of outfits to display per page
@@ -539,18 +551,47 @@ function initMod() {
         
                 // Hair checkbox
                 if (MouseIn(1810, 367, 30, 30)) {
+                    // Toggle apply hair
                     applyHairWithOutfit = !applyHairWithOutfit;
+                    
+                    // If turning off Apply Hair, also turn off Hair Only
+                    if (applyHairWithOutfit) {
+                        hairOnly = false;
+                    }
                     
                     // If in export mode, update the export code to reflect the hair preference
                     if (isExportMode) {
                         const importElement = document.getElementById("OutfitManagerImport");
                         if (importElement) {
                             // Regenerate the outfit code with the current hair preference
-                            importElement.value = getCurrentOutfitBCXCode(CurrentCharacter, applyHairWithOutfit);
+                            // When hairOnly is true, we should include hair but also indicate we only want hair items
+                            importElement.value = getCurrentOutfitBCXCode(CurrentCharacter, true, hairOnly);
                         }
                     }
                     return;
                 }
+         
+                 // Hair-only button
+                 if (MouseIn(1810, 439, 30, 30)) {
+                     // Toggle hair only mode
+                     hairOnly = !hairOnly;
+                     
+                     // If turning on Hair Only, ensure Apply Hair is also on
+                     if (hairOnly) {
+                         applyHairWithOutfit = false;
+                     }
+                     
+                     // If in export mode, update the export code to reflect the hair preference
+                     if (isExportMode) {
+                         const importElement = document.getElementById("OutfitManagerImport");
+                         if (importElement) {
+                             // Regenerate the outfit code with the current hair preference
+                             // When hairOnly is true, we should include hair but also indicate we only want hair items
+                             importElement.value = getCurrentOutfitBCXCode(CurrentCharacter, true, hairOnly);
+                         }
+                     }
+                     return;
+                 }
         
                 // Exit button with matching coordinates
                 if (MouseIn(1885, 15, 90, 90)) {
@@ -560,6 +601,8 @@ function initMod() {
                     isSortMode = false;
                     isExportMode = false;
                     isFolderManagementMode = false;
+                    hairOnly = false;
+                    applyHairWithOutfit = false;
                     selectedOutfits = [];
                     
                     // Remove the style element that hides dialog elements
@@ -1158,41 +1201,63 @@ function initMod() {
                     return;
                 }
 
+                // Detect if it's a hair-only outfit
+                const isHairOnlyOutfit = outfitData.length > 0 && outfitData.every(item => 
+                    item.Group === "HairFront" || item.Group === "HairBack"
+                );
+
                 // Get outfit name
                 let outfitName;
                 do {
-                    outfitName = prompt("Enter name for imported outfit:");
+                    // Include [Hair] indicator in prompt if it's hair-only
+                    const promptText = isHairOnlyOutfit 
+                        ? "Enter name for imported hair outfit (will be saved as Hair Only):"
+                        : "Enter name for imported outfit:";
+                    
+                    outfitName = prompt(promptText);
                     if (outfitName === null) { // User clicked Cancel
                         importElement.value = "";
                         return;
                     }
                 } while (!outfitName.trim()); // Keep prompting if empty or only whitespace
 
-                const memberNumber = Player.MemberNumber;
-                const storageKey = `${STORAGE_PREFIX}${memberNumber}`;
+                // Apply the BCX outfit data to a temporary character for saving
+                const tempChar = CharacterLoadSimple("ImportTempChar");
+                if (!tempChar) return;
 
-                // Get or initialize storage
-                const storageData = localStorage.getItem(storageKey);
-                const outfitStorage = storageData ? 
-                    JSON.parse(storageData) : 
-                    { outfits: [] };
-
-                    // Check outfit limit
-                if (outfitStorage.outfits.length >= MAX_OUTFITS) {
-                    alert("Maximum outfit limit reached. Please delete some outfits first.");
-                    return;
+                // Set the BCX data directly to the character
+                tempChar.Appearance = [];
+                for (const item of outfitData) {
+                    const asset = AssetGet(tempChar.AssetFamily, item.Group, item.Name);
+                    if (!asset) continue;
+                    
+                    // Create appearance item
+                    const appearanceItem = {
+                        Asset: asset,
+                        Color: item.Color || "Default",
+                        Property: item.Property || {},
+                    };
+                    
+                    tempChar.Appearance.push(appearanceItem);
                 }
-
-                outfitStorage.outfits.push({
-                    name: outfitName,
-                    data: importString  // Store the original BCX compressed data directly
-                });
-
-                // Save back to storage
-                localStorage.setItem(storageKey, JSON.stringify(outfitStorage));
                 
+                // Update the character canvas to ensure the appearance is processed
+                CharacterLoadCanvas(tempChar);
+                
+                // Temporarily set hairOnly flag if this is a hair-only outfit
+                const originalHairOnly = hairOnly;
+                if (isHairOnlyOutfit) {
+                    hairOnly = true;
+                }
+                
+                // Save the outfit using the existing SaveOutfit function
+                SaveOutfit(tempChar, outfitName);
+                
+                // Restore original hairOnly value
+                hairOnly = originalHairOnly;
+                
+                // Clear the import field
                 importElement.value = "";
-                ShowOutfitNotification(`Outfit "${outfitName}" has been imported`);
 
             } catch (error) {
                 console.error("Import error:", error);
@@ -1205,18 +1270,23 @@ function initMod() {
         const DEFAULT_HELP_TEXT = [
             "Outfit Manager Help:",
             "",
-            "• Up to 80 outfits can be saved",
+            `• Up to ${MAX_OUTFITS} outfits can be saved`,
             "• Left click an outfit to wear it",
-            "• Use the rename button (✎) to rename an outfit",
-            "• Use the delete button (🗑️) to remove an outfit",
-            "• The save button stores current appearance as",
+            "• Use the 'Rename' button (✎) to rename an outfit",
+            "• Use the 'Delete' button (🗑️) to remove an outfit",
+            "• The 'Save' button stores current appearance as",
             "  a new outfit",
             "• Saving with an existing name will prompt",
             "  you to overwrite the outfit",
-            "• Use the import button to import an outfit",
+            "• Use the 'Import' button to import an outfit",
             "  from BCX codes",
             "• Toggle the 'Apply Hair' checkbox to include",
-            "  hairstyles when applying an outfit"
+            "  hairstyles when applying an outfit",
+            "• The ✂️ icon denotes a hair-only outfit",
+            "• Check the 'Hair Only' box to only save",
+            "  hairstyles as an outfit.  Checking this box",
+            "  will only apply hairstyles if an outfit",
+            "  contains other clothing or restraints."
         ];
 
         const SORT_MODE_HELP_TEXT = [
@@ -1243,6 +1313,8 @@ function initMod() {
             "• Outfits cannot be worn while in export mode",
             "• The outfit code will change when the",
             "  'Apply Hair' checkbox is checked/unchecked",
+            "• Checking the 'Hair Only' checkbox will",
+            "  only export hair styles",
             "• Click 'Done' to exit export mode"
         ];
 
@@ -1322,6 +1394,13 @@ function initMod() {
                 DrawImageResize("Icons/Checked.png", 1815, 372, 20, 20);
             }
             
+            // Hair-only button
+            DrawText("Hair Only", 1900, 425, "White", "Black");
+            DrawButton(1810, 439, 30, 30, "", "White");
+            if (hairOnly) {
+                DrawImageResize("Icons/Checked.png", 1815, 442, 20, 20);
+            }
+
             // Add folder management row with side buttons
             const memberNumber = Player.MemberNumber;
             const storageKey = `${STORAGE_PREFIX}${memberNumber}`;
@@ -1466,8 +1545,8 @@ function initMod() {
                     isHoveringAnyOutfit = true;
 
                     try {
-                        // Only check for locked items in default mode
-                        if (!isSortMode && !isExportMode && !isFolderManagementMode) {
+                        // Only check for locked items in default mode and when hair only mode is not enabled
+                        if (!isSortMode && !isExportMode && !isFolderManagementMode && !hairOnly) {
                             const decompressed = LZString.decompressFromBase64(outfit.data);
                             if (!decompressed) {
                                 throw new Error("Failed to decompress outfit data");
@@ -1505,6 +1584,11 @@ function initMod() {
                     }
                 }
 
+                    
+
+                // Add hair icon prefix for hair-only outfits
+                const prefix = outfit.isHairOnly ? "✂️ " : "";
+
                 if (isFolderManagementMode) {
                     // In folder management mode, show checkboxes for outfit selection
                     const isSelected = selectedOutfits.includes(outfit.name);
@@ -1516,7 +1600,7 @@ function initMod() {
                     
                     // Calculate outfit number (exclude folders from numbering)
                     const outfitNumber = i + 1 - folderEntries.length;
-                    DrawButton(1210, yPos, 490, 60, `${outfitNumber}. ${outfit.name}`, "White");
+                    DrawButton(1210, yPos, 490, 60, `${outfitNumber}. ${prefix}${outfit.name}`, "White");
                 } else if (isSortMode) {
                     // In sort mode, show up/down arrows instead of rename/delete
                     if (i > 0 && !outfits[i-1].isFolder) { // Not first outfit and previous item is not a folder
@@ -1528,23 +1612,22 @@ function initMod() {
                     
                     // Calculate outfit number (exclude folders from numbering)
                     const outfitNumber = i + 1 - folderEntries.length;
-                    DrawButton(1210, yPos, 490, 60, `${outfitNumber}. ${outfit.name}`, "White");
+                    DrawButton(1210, yPos, 490, 60, `${outfitNumber}. ${prefix}${outfit.name}`, "White");
+                    DrawButton(1710, yPos + 5, 50, 50, "🗑️", "White", "", "Delete outfit");
+                } else if (isExportMode) {
+                    // Calculate outfit number (exclude folders from numbering)
+                    const outfitNumber = i + 1 - folderEntries.length;
+                    DrawButton(1210, yPos, 490, 60, `${outfitNumber}. ${prefix}${outfit.name}`, "White");
+                    // Export button instead of delete
+                    DrawButton(1710, yPos + 5, 50, 50, "📋", "White", "", "Copy outfit code");
                 } else {
-                    if (isExportMode) {
-                        // Calculate outfit number (exclude folders from numbering)
-                        const outfitNumber = i + 1 - folderEntries.length;
-                        DrawButton(1210, yPos, 490, 60, `${outfitNumber}. ${outfit.name}`, "White");
-                        // Export button instead of delete
-                        DrawButton(1710, yPos + 5, 50, 50, "📋", "White", "", "Copy outfit code");
-                    } else {
-                        // Normal mode - rename/delete buttons
-                        DrawButton(1150, yPos + 5, 50, 50, "✎", "White", "", "Rename outfit");
-                        
-                        // Calculate outfit number (exclude folders from numbering)
-                        const outfitNumber = i + 1 - folderEntries.length;
-                        DrawButton(1210, yPos, 490, 60, `${outfitNumber}. ${outfit.name}`, "White");
-                        DrawButton(1710, yPos + 5, 50, 50, "🗑️", "White", "", "Delete outfit");
-                    }
+                    // Normal mode - rename/delete buttons
+                    DrawButton(1150, yPos + 5, 50, 50, "✎", "White", "", "Rename outfit");
+                    
+                    // Calculate outfit number (exclude folders from numbering)
+                    const outfitNumber = i + 1 - folderEntries.length;
+                    DrawButton(1210, yPos, 490, 60, `${outfitNumber}. ${prefix}${outfit.name}`, "White");
+                    DrawButton(1710, yPos + 5, 50, 50, "🗑️", "White", "", "Delete outfit");
                 }
             }
 
@@ -1571,7 +1654,7 @@ function initMod() {
             MainCanvas.textAlign = "left";
             MainCanvas.font = "24px " + originalFont.split("px ")[1];
             helpText.forEach((text, i) => {
-                DrawText(text, 25, 200 + (i * 25), "White", "Black");
+                DrawText(text, 25, 150 + (i * 25), "White", "Black");
             });
             MainCanvas.textAlign = "center";
             MainCanvas.font = originalFont;
@@ -1743,9 +1826,9 @@ function initMod() {
                     outfitStorage.folders = ["Main"];
                 }
 
-                // Check outfit limit (80 outfits maximum)
+                // Check outfit limit (MAX_OUTFITS maximum)
                 if (outfitStorage.outfits.length >= MAX_OUTFITS && !outfitStorage.outfits.some(o => o.name === outfitName)) {
-                    ShowOutfitNotification("Maximum outfit limit (80) reached. Please delete some outfits first.");
+                    ShowOutfitNotification(`Maximum outfit limit (${MAX_OUTFITS}) reached. Please delete some outfits first.`);
                     return;
                 }
 
@@ -1813,17 +1896,20 @@ function initMod() {
                 const newOutfit = {
                     name: outfitName,
                     folder: currentFolder,
+                    isHairOnly: hairOnly,
                     data: LZString.compressToBase64(JSON.stringify(outfitData))
                 };
                 
                 // If overwriting, replace at same index; otherwise add to end
                 if (overwriteIndex >= 0) {
-                    outfitStorage.outfits[overwriteIndex] = newOutfit;                    
-                    ShowOutfitNotification(`Outfit "${outfitName}" has been overwritten`);
+                    outfitStorage.outfits[overwriteIndex] = newOutfit;
+                    const hairOnlyIndicator = newOutfit.isHairOnly ? " [Hair]" : "";
+                    ShowOutfitNotification(`Outfit "${outfitName}${hairOnlyIndicator}" has been overwritten`);
                 } else {
                     // Add the outfit with the current folder
                     outfitStorage.outfits.push(newOutfit);
-                    ShowOutfitNotification(`Outfit "${outfitName}" has been saved to folder "${currentFolder}"`);
+                    const hairOnlyIndicator = newOutfit.isHairOnly ? " [Hair]" : "";
+                    ShowOutfitNotification(`Outfit "${outfitName}${hairOnlyIndicator}" has been saved to folder "${currentFolder}"`);
                 }
 
                 // Save the outfitStorage object uncompressed
@@ -1871,6 +1957,58 @@ function initMod() {
                     return false;
                 }
 
+                // Use the outfit's stored isHairOnly flag or the global hairOnly setting
+                // This allows applying just the hair from any outfit if the checkbox is checked
+                const isHairOnlyOutfit = outfit.isHairOnly || hairOnly;
+
+                // Special handling for Hair Only mode - only replace hair items, keep everything else
+                if (isHairOnlyOutfit) {
+                    // Check if outfit has any hair items
+                    const hasHairItems = outfitData.some(item => 
+                        item.Group === "HairFront" || item.Group === "HairBack"
+                    );
+
+                    // Only remove existing hair if we have hair items to replace them with
+                    if (hasHairItems) {
+                        for (let A = C.Appearance.length - 1; A >= 0; A--) {
+                            const item = C.Appearance[A];
+                            if ((item.Asset.Group.Name === "HairFront" || item.Asset.Group.Name === "HairBack") && 
+                                !InventoryItemHasEffect(InventoryGet(C, item.Asset.Group.Name), "Lock")) {
+                                C.Appearance.splice(A, 1);
+                            }
+                        }
+                        
+                        // Add hair items from the outfit
+                        for (const item of outfitData) {
+                            // Only process hair items
+                            if (item.Group !== "HairFront" && item.Group !== "HairBack") continue;
+                            
+                            const asset = AssetGet(C.AssetFamily, item.Group, item.Name);
+                            if (!asset) continue;
+                            
+                            // Skip if the group is locked
+                            if (InventoryItemHasEffect(InventoryGet(C, item.Group), "Lock")) continue;
+                            
+                            const bondageSkill = Player.Skill.find(skill => skill.Type === "Bondage");
+                            const newItem = {
+                                Asset: asset,
+                                Color: item.Color || "Default",
+                                Property: item.Property ? {...item.Property} : undefined,
+                                Difficulty: asset.Difficulty !== undefined ? asset.Difficulty + (bondageSkill ? bondageSkill.Level : 0) : 0
+                            };
+                            if (item.Craft) newItem.Craft = item.Craft;
+                            C.Appearance.push(newItem);
+                        }
+                    }
+                    // If no hair items in outfit, keep existing hair
+                    
+                    CharacterRefresh(C);
+                    if (C === CurrentCharacter) {
+                        ChatRoomCharacterUpdate(C);
+                    }
+                    return true;
+                }
+
                 // Clear existing items, but keep cosplay items
                 for (let A = C.Appearance.length - 1; A >= 0; A--) {
                     const item = C.Appearance[A];
@@ -1883,13 +2021,39 @@ function initMod() {
                     C.Appearance.splice(A, 1);
                 }
 
+                // Check if outfit has any hair items
+                const hasHairItems = outfitData.some(item => 
+                    item.Group === "HairFront" || item.Group === "HairBack"
+                );
+
+                // First, handle hair items if isHairOnlyOutfit is true
+                if (isHairOnlyOutfit) {
+                    // Only remove existing hair if we have hair items to replace them with
+                    if (hasHairItems) {
+                        for (let A = C.Appearance.length - 1; A >= 0; A--) {
+                            const item = C.Appearance[A];
+                            if ((item.Asset.Group.Name === "HairFront" || item.Asset.Group.Name === "HairBack") && 
+                                !InventoryItemHasEffect(InventoryGet(C, item.Asset.Group.Name), "Lock")) {
+                                C.Appearance.splice(A, 1);
+                            }
+                        }
+                    }
+                    // If no hair items in outfit, keep existing hair
+                }
+
                 // Remove existing items except locked and blocked body cosplay
                 const groupsToReplace = new Set(outfitData.map(item => item.Group));
                 C.Appearance = C.Appearance.filter(item =>
+                    // Keep items that aren't in the outfit
                     !groupsToReplace.has(item.Asset.Group.Name) ||
+                    // Keep locked items
                     InventoryItemHasEffect(InventoryGet(C, item.Asset.Group.Name), "Lock") ||
+                    // Keep blocked body cosplay
                     (item.Asset.Group.BodyCosplay && CurrentCharacter.OnlineSharedSettings?.BlockBodyCosplay) ||
-                    (!applyHairWithOutfit && (item.Asset.Group.Name === "HairFront" || item.Asset.Group.Name === "HairBack")) ||
+                    // Keep hair if applyHairWithOutfit is false or if isHairOnlyOutfit and no hair items in outfit
+                    ((!applyHairWithOutfit || (isHairOnlyOutfit && !hasHairItems)) && 
+                     (item.Asset.Group.Name === "HairFront" || item.Asset.Group.Name === "HairBack")) ||
+                    // Keep items that aren't clothing, items, body markings, or hair
                     !(item.Asset.Group.Clothing ||
                       item.Asset.Group.Name.includes("Item") ||
                       item.Asset.Group.Name.includes("BodyMarkings") ||
@@ -1908,6 +2072,9 @@ function initMod() {
                     
                     // Skip hair items if applyHairWithOutfit is false
                     if (!applyHairWithOutfit && (item.Group === "HairFront" || item.Group === "HairBack")) continue;
+                    
+                    // Skip non-hair items if in hair-only mode
+                    if (isHairOnlyOutfit && !(item.Group === "HairFront" || item.Group === "HairBack")) continue;
 
                     const bondageSkill = Player.Skill.find(skill => skill.Type === "Bondage");
                     const newItem = {
@@ -1933,21 +2100,30 @@ function initMod() {
         }
 
         // Add this helper function to get BCX code for a character's current outfit
-        function getCurrentOutfitBCXCode(C, includeHair = null) {
+        function getCurrentOutfitBCXCode(C, includeHair = null, forceHairOnly = false) {
             try {
                 // Use the passed parameter if provided, otherwise use the global setting
                 const shouldIncludeHair = includeHair !== null ? includeHair : applyHairWithOutfit;
                 
+                // Use the passed forceHairOnly parameter if provided, otherwise use the global setting
+                const isHairOnly = forceHairOnly !== false ? forceHairOnly : hairOnly;
+                
                 const outfitData = C.Appearance
                     .filter(item => {
                         const group = item?.Asset?.Group;
+                        if (!group) return false;
                         
-                        // Skip hair items if not including hair
-                        if (!shouldIncludeHair && (group?.Name === "HairFront" || group?.Name === "HairBack")) {
+                        // If in hair-only mode, ONLY include hair items
+                        if (isHairOnly) {
+                            return group.Name === "HairFront" || group.Name === "HairBack";
+                        }
+                        
+                        // Otherwise, include clothing, items, and hair (if shouldIncludeHair is true)
+                        if (!shouldIncludeHair && (group.Name === "HairFront" || group.Name === "HairBack")) {
                             return false;
                         }
                         
-                        return group && (
+                        return (
                             group.Clothing || 
                             group.Name.includes("Item") || 
                             group.Name.includes("BodyMarkings") ||
@@ -2392,6 +2568,7 @@ function initMod() {
                 isSortMode = false;
                 isExportMode = false;
                 isFolderManagementMode = false;
+                hairOnly = false;
                 selectedOutfits = [];
                 
                 // Remove our style element that hides dialog elements
