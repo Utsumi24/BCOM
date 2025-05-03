@@ -15,6 +15,7 @@ You don't have to. It's merely just an alternate way of saving custom outfits. T
 
 ### How many outfits can I save?
 Up to 80.  I figured it was a nice round number. ¯\\_(ツ)_/¯
+This number could be changed in the future.
 
 ### Tampermonkey/Violentmonkey install:
 https://utsumi24.github.io/BCOM/bcomloader.user.js
