@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         BC Outfit Manager
 // @namespace https://www.bondageprojects.com/
-// @version      0.7.6
+// @version      0.7.6.1
 // @description  Outfit management system for Bondage Club
 // @author       Utsumi
 // @match https://bondageprojects.elementfx.com/*
@@ -15,144 +15,7 @@
 
 var bcModSdk=function(){"use strict";const o="1.2.0";function e(o){alert("Mod ERROR:\n"+o);const e=new Error(o);throw console.error(e),e}const t=new TextEncoder;function n(o){return!!o&&"object"==typeof o&&!Array.isArray(o)}function r(o){const e=new Set;return o.filter((o=>!e.has(o)&&e.add(o)))}const i=new Map,a=new Set;function c(o){a.has(o)||(a.add(o),console.warn(o))}function s(o){const e=[],t=new Map,n=new Set;for(const r of f.values()){const i=r.patching.get(o.name);if(i){e.push(...i.hooks);for(const[e,a]of i.patches.entries())t.has(e)&&t.get(e)!==a&&c(`ModSDK: Mod '${r.name}' is patching function ${o.name} with same pattern that is already applied by different mod, but with different pattern:\nPattern:\n${e}\nPatch1:\n${t.get(e)||""}\nPatch2:\n${a}`),t.set(e,a),n.add(r.name)}}e.sort(((o,e)=>e.priority-o.priority));const r=function(o,e){if(0===e.size)return o;let t=o.toString().replaceAll("\r\n","\n");for(const[n,r]of e.entries())t.includes(n)||c(`ModSDK: Patching ${o.name}: Patch ${n} not applied`),t=t.replaceAll(n,r);return(0,eval)(`(${t})`)}(o.original,t);let i=function(e){var t,i;const a=null===(i=(t=m.errorReporterHooks).hookChainExit)||void 0===i?void 0:i.call(t,o.name,n),c=r.apply(this,e);return null==a||a(),c};for(let t=e.length-1;t>=0;t--){const n=e[t],r=i;i=function(e){var t,i;const a=null===(i=(t=m.errorReporterHooks).hookEnter)||void 0===i?void 0:i.call(t,o.name,n.mod),c=n.hook.apply(this,[e,o=>{if(1!==arguments.length||!Array.isArray(e))throw new Error(`Mod ${n.mod} failed to call next hook: Expected args to be array, got ${typeof o}`);return r.call(this,o)}]);return null==a||a(),c}}return{hooks:e,patches:t,patchesSources:n,enter:i,final:r}}function l(o,e=!1){let r=i.get(o);if(r)e&&(r.precomputed=s(r));else{let e=window;const a=o.split(".");for(let t=0;t<a.length-1;t++)if(e=e[a[t]],!n(e))throw new Error(`ModSDK: Function ${o} to be patched not found; ${a.slice(0,t+1).join(".")} is not object`);const c=e[a[a.length-1]];if("function"!=typeof c)throw new Error(`ModSDK: Function ${o} to be patched not found`);const l=function(o){let e=-1;for(const n of t.encode(o)){let o=255&(e^n);for(let e=0;e<8;e++)o=1&o?-306674912^o>>>1:o>>>1;e=e>>>8^o}return((-1^e)>>>0).toString(16).padStart(8,"0").toUpperCase()}(c.toString().replaceAll("\r\n","\n")),d={name:o,original:c,originalHash:l};r=Object.assign(Object.assign({},d),{precomputed:s(d),router:()=>{},context:e,contextProperty:a[a.length-1]}),r.router=function(o){return function(...e){return o.precomputed.enter.apply(this,[e])}}(r),i.set(o,r),e[r.contextProperty]=r.router}return r}function d(){for(const o of i.values())o.precomputed=s(o)}function p(){const o=new Map;for(const[e,t]of i)o.set(e,{name:e,original:t.original,originalHash:t.originalHash,sdkEntrypoint:t.router,currentEntrypoint:t.context[t.contextProperty],hookedByMods:r(t.precomputed.hooks.map((o=>o.mod))),patchedByMods:Array.from(t.precomputed.patchesSources)});return o}const f=new Map;function u(o){f.get(o.name)!==o&&e(`Failed to unload mod '${o.name}': Not registered`),f.delete(o.name),o.loaded=!1,d()}function g(o,t){o&&"object"==typeof o||e("Failed to register mod: Expected info object, got "+typeof o),"string"==typeof o.name&&o.name||e("Failed to register mod: Expected name to be non-empty string, got "+typeof o.name);let r=`'${o.name}'`;"string"==typeof o.fullName&&o.fullName||e(`Failed to register mod ${r}: Expected fullName to be non-empty string, got ${typeof o.fullName}`),r=`'${o.fullName} (${o.name})'`,"string"!=typeof o.version&&e(`Failed to register mod ${r}: Expected version to be string, got ${typeof o.version}`),o.repository||(o.repository=void 0),void 0!==o.repository&&"string"!=typeof o.repository&&e(`Failed to register mod ${r}: Expected repository to be undefined or string, got ${typeof o.version}`),null==t&&(t={}),t&&"object"==typeof t||e(`Failed to register mod ${r}: Expected options to be undefined or object, got ${typeof t}`);const i=!0===t.allowReplace,a=f.get(o.name);a&&(a.allowReplace&&i||e(`Refusing to load mod ${r}: it is already loaded and doesn't allow being replaced.\nWas the mod loaded multiple times?`),u(a));const c=o=>{let e=g.patching.get(o.name);return e||(e={hooks:[],patches:new Map},g.patching.set(o.name,e)),e},s=(o,t)=>(...n)=>{var i,a;const c=null===(a=(i=m.errorReporterHooks).apiEndpointEnter)||void 0===a?void 0:a.call(i,o,g.name);g.loaded||e(`Mod ${r} attempted to call SDK function after being unloaded`);const s=t(...n);return null==c||c(),s},p={unload:s("unload",(()=>u(g))),hookFunction:s("hookFunction",((o,t,n)=>{"string"==typeof o&&o||e(`Mod ${r} failed to patch a function: Expected function name string, got ${typeof o}`);const i=l(o),a=c(i);"number"!=typeof t&&e(`Mod ${r} failed to hook function '${o}': Expected priority number, got ${typeof t}`),"function"!=typeof n&&e(`Mod ${r} failed to hook function '${o}': Expected hook function, got ${typeof n}`);const s={mod:g.name,priority:t,hook:n};return a.hooks.push(s),d(),()=>{const o=a.hooks.indexOf(s);o>=0&&(a.hooks.splice(o,1),d())}})),patchFunction:s("patchFunction",((o,t)=>{"string"==typeof o&&o||e(`Mod ${r} failed to patch a function: Expected function name string, got ${typeof o}`);const i=l(o),a=c(i);n(t)||e(`Mod ${r} failed to patch function '${o}': Expected patches object, got ${typeof t}`);for(const[n,i]of Object.entries(t))"string"==typeof i?a.patches.set(n,i):null===i?a.patches.delete(n):e(`Mod ${r} failed to patch function '${o}': Invalid format of patch '${n}'`);d()})),removePatches:s("removePatches",(o=>{"string"==typeof o&&o||e(`Mod ${r} failed to patch a function: Expected function name string, got ${typeof o}`);const t=l(o);c(t).patches.clear(),d()})),callOriginal:s("callOriginal",((o,t,n)=>{"string"==typeof o&&o||e(`Mod ${r} failed to call a function: Expected function name string, got ${typeof o}`);const i=l(o);return Array.isArray(t)||e(`Mod ${r} failed to call a function: Expected args array, got ${typeof t}`),i.original.apply(null!=n?n:globalThis,t)})),getOriginalHash:s("getOriginalHash",(o=>{"string"==typeof o&&o||e(`Mod ${r} failed to get hash: Expected function name string, got ${typeof o}`);return l(o).originalHash}))},g={name:o.name,fullName:o.fullName,version:o.version,repository:o.repository,allowReplace:i,api:p,loaded:!0,patching:new Map};return f.set(o.name,g),Object.freeze(p)}function h(){const o=[];for(const e of f.values())o.push({name:e.name,fullName:e.fullName,version:e.version,repository:e.repository});return o}let m;const y=void 0===window.bcModSdk?window.bcModSdk=function(){const e={version:o,apiVersion:1,registerMod:g,getModsInfo:h,getPatchingInfo:p,errorReporterHooks:Object.seal({apiEndpointEnter:null,hookEnter:null,hookChainExit:null})};return m=e,Object.freeze(e)}():(n(window.bcModSdk)||e("Failed to init Mod SDK: Name already in use"),1!==window.bcModSdk.apiVersion&&e(`Failed to init Mod SDK: Different version already loaded ('1.2.0' vs '${window.bcModSdk.version}')`),window.bcModSdk.version!==o&&alert(`Mod SDK warning: Loading different but compatible versions ('1.2.0' vs '${window.bcModSdk.version}')\nOne of mods you are using is using an old version of SDK. It will work for now but please inform author to update`),window.bcModSdk);return"undefined"!=typeof exports&&(Object.defineProperty(exports,"__esModule",{value:!0}),exports.default=y),y}();
 
-const VERSION_NUMBER = "0.7.6";
-
-/*
-# BC Outfit Manager Changelog
-
-## v0.7.6
-- Added a "Hair Only" checkbox to the outfit manager to allow players to save only hairstyles as outfits and to only apply hairstyles instead of the entire outfit
-- Added help text to explain the Hair Only checkbox
-- The help text will not change to show locked items if the Hair Only checkbox is checked
-- Added a ✂️ icon to denote "Hair Only" outfits
-- Changed how BCX importing works to instead pass the imported outfit into the saveOutfit function instead of using its own saving method
-- Altered how the BCX export code is generated to only export hair if the Hair Only checkbox is checked
-- Added a check when importing a BCX code to check if it only contains hair, and if so, it will import it as a hair only outfit
-
-## v0.7.5.1
-- Recreated the Outfit Manager button to use DOM elements so it can be clicked on over other DOM elements
-- Properly hide and restore the Pose, Expressions, and Owner Rules Menus when the Outfit Manager is opened or closed
-- Fixed dialog restoration when exiting the Outfit Manager due to DOM element integration
-
-## v0.7.5
-- Added a checkbox to apply hairstyles when wearing an outfit
-- Saving outfits now saves the hairstyle as well
-- Added help text regarding the apply hair checkbox
-- Made the Outfit Manager's title to only use the player's nickname instead of the CurrentCharacter's name to avoid confusion
-- Fixed outfit position preservation when overwriting outfits
-- Enhanced export mode to update BCX codes in real-time when hair preference changes
-
-## v0.7.4.1
-- Fixed issue with sorting outfits.  Outfit sorting works as intended again.
-
-## v0.7.4
-- Added a better check for the /bcom command when a name is specified, it exclusively checks for the character's nickname
-- Added a check for the /bcom command if more than one character has the same first name, it will notify the user to use the member number instead
-- Fixed exit button not working if there is no previous dialog mode to return to, it now defaults to the 'dialog'
-- Added permission check to prevent the outfit manager from being opened if the player doesn't have permission to interact with the character that was clicked on
-- Added permission check for the /bcom command
-
-## v0.7.3
-- Cosplay items are not removed when previewing or applying an outfit
-
-## v0.7.2
-- Fixed issue with duplicate outfit names across different folders
-- Added check to prevent moving outfits when name conflicts exist in the destination folder
-- Added check to prevent saving an outfit when the name already exists in another folder
-- Fixed notification when importing outfits to show the actual number of outfits imported instead of the total number of outfits
-- Added chat command "bcom" to open the outfit manager for a specific character, if a name is provided, or for yourself if no name is provided
-
-## v0.7.1
-- Ensured that all modes are reset when exiting Outfit Manager
-
-## v0.7.0
-- Added folder system for organizing outfits
--- Allows the user to create, rename, and delete folders
--- Allows the user to move outfits between folders
--- Added a breadcrumb-style back button to navigate through folders
-
-## v0.6.1
-- Added backup and restore buttons to outfit manager
-- Removed debug coordinates
-
-## v0.6.0
-- Added support for exporting outfits
-- Added separate help text for sort mode and export mode
-- Checked if body cosplay is blocked before applying cosplay items from outfits
-
-## v0.5.3
-- Added outfit limit of 80 outfits
-- Prevented exiting the outfit manager when the display character is clicked on
-
-## v0.5.2
-- Added notification when you try to apply an outfit while in sort mode
-- Amended help text to let player know they can't apply an outfit when in sort mode
-
-## v0.5.1
-- Changed how display character's name is displayed to display the CurrentCharacter's nickname so it will show (Preview) more reliably
-- Made display character visible when blind while in outfit manager
-- Made room background visible when blind while in outfit manager
-
-## v0.5.0
-- Removed legacy UTF16 compression support
-- Standardized outfit storage to exclusively use BCX format
-- Changed how outfits are saved to use a single storage key per member number
-- Added outfit sorting functionality with up/down controls
-- Cleaned up and optimized codebase
-- Improved error handling for BCX outfit validation
-
-## v0.4.1
-- Fixed console warning by properly implementing "outfits" dialog mode
-- Improved dialog mode transitions to/from outfit manager
-- Added proper cleanup when switching dialog modes
-
-## v0.4.0
-- Added support for importing BCX outfits
-- Improved data storage format using Base64 compression
-- Added backwards compatibility for legacy outfit formats
-- Fixed preview display issues with imported outfits
-- Added robust error handling and validation for BCX outfit imports
-- Added error codes (E1-E4) for better debugging of import issues
-- Improved outfit rename functionality with better error handling
-- Added validation to prevent empty outfit names
-- Added confirmation dialog for overwriting existing outfits
-- Added support for both Base64 and UTF16 decompression when loading outfits
-- Added user feedback notifications for outfit actions
-- Added version text to bottom right corner of game window
-
-## v0.3.1
-- Fixed issue where character poses weren't updating correctly in outfit preview
-- Removed unnecessary Y-position offset adjustments that were causing display issues for poses
-- Added "(Preview)" suffix to display character's name
-- Improved display of locked items that cannot be replaced by outfit changes by using the
-  help text instead of the button's hover text
-
-## v0.3.0
-- Added outfit preview functionality when hovering over outfits
-- Added help text section showing outfit information and locked items
-- Improved outfit menu layout and organization
-- Added pagination for outfits (8 outfits per page)
-
-## v0.2.1
-- Fixed issue where outfit menu would not properly return to previous dialog mode
-- Added support for both 'items' and 'dialog' mode when accessing outfit manager
-- Improved button positioning consistency across different dialog modes
-- Fixed back button location to match game's standard positioning depending on dialog mode
-
-## v0.2.0
-- Added rename functionality for outfits
-- Added delete functionality for outfits
-- Added confirmation dialogs for overwriting and deleting outfits
-- Added notification system for outfit actions
-- Improved error handling and user feedback
-
-## v0.1.0
-- Initial release
-- Basic outfit saving and loading functionality
-- Added outfit manager button to character dialog
-- Basic outfit menu interface
-*/
-
+const VERSION_NUMBER = "0.7.6.1";
 
 let modInitialized = false;
 
@@ -244,9 +107,7 @@ function initMod() {
         // Initialize appearance data before any UI hooks
         modApi.hookFunction("CharacterAppearanceBuildCanvas", OUTFIT_PRIORITIES.UI_INIT, (args, next) => {
             const [C] = args;
-            if (!C.Appearance) C.Appearance = {};
-            if (!C.Appearance.Item) C.Appearance.Item = [];
-            if (!C.Appearance.Outfits) C.Appearance.Outfits = [];
+            if (!C.Appearance) C.Appearance = [];
             return next(args);
         });
 
@@ -342,10 +203,7 @@ function initMod() {
                 
                 // Set initial background color based on permission
                 buttonContainer.style.backgroundColor = hasPermission ? "white" : "pink";
-                
-                // Position the button using ElementPositionFixed
-                ElementPositionFixed(buttonContainer, buttonX, buttonY, BUTTON_SIZE, BUTTON_SIZE);
-                
+                                
                 // Set a high z-index to ensure button is always on top of other dialog elements
                 buttonContainer.style.zIndex = "2000";
                 buttonContainer.style.position = "absolute";
@@ -478,18 +336,31 @@ function initMod() {
                 const startIndex = currentPage * OUTFITS_PER_PAGE;
                 const endIndex = Math.min(startIndex + OUTFITS_PER_PAGE, outfits.length);
         
-                // Pagination buttons
+                // Handle pagination clicks
                 if (totalPages > 1) {
                     const paginationY = 930;
-        
-                    // Previous page button
+                    
+                    // First page button click
+                    if (currentPage >= 2 && MouseIn(1100, paginationY, 100, 60)) {
+                        DialogOutfitPage = 0;
+                        return;
+                    }
+                    
+                    // Previous page button click
                     if (currentPage > 0 && MouseIn(1200, paginationY, 100, 60)) {
                         DialogOutfitPage = currentPage - 1;
                         return;
                     }
-                    // Next page button
+                    
+                    // Next page button click
                     if (currentPage < totalPages - 1 && MouseIn(1600, paginationY, 100, 60)) {
                         DialogOutfitPage = currentPage + 1;
+                        return;
+                    }
+                    
+                    // Last page button click
+                    if (currentPage < totalPages - 2 && MouseIn(1700, paginationY, 100, 60)) {
+                        DialogOutfitPage = totalPages - 1;
                         return;
                     }
                 }
@@ -1438,7 +1309,6 @@ function initMod() {
             DrawButton(1250, 180, 400, 60, centerButtonText, "Orange");
             
             // Define constants
-            const OUTFITS_PER_PAGE = 8;
             let isHoveringAnyOutfit = false;
             let yOffset = 0;  // Reset the offset
 
@@ -1479,6 +1349,19 @@ function initMod() {
             // -- Code has been moved to the end of the function to ensure proper z-index --
 
             // Create a display-only copy of the character
+            // Old approach (deep copy):
+            // displayChar.Appearance = CurrentCharacter.Appearance.map(item => ({
+            //     ...item,
+            //     Property: item.Property ? { ...item.Property } : undefined,
+            //     Craft: item.Craft ? { ...item.Craft } : undefined,
+            //     Color: Array.isArray(item.Color) ? [...item.Color] : item.Color
+            // }));  // Deep copy
+
+            // New approach: use bundle/load for a validated, server-style copy
+            // 1. Create the bundle from the current character
+            const appearanceBundle = ServerAppearanceBundle(CurrentCharacter.Appearance);
+
+            // 2. Create the dummy character
             const displayChar = {
                 ...CurrentCharacter,
                 IsPlayer: () => false,
@@ -1490,10 +1373,16 @@ function initMod() {
                 AllowedPose: [],
                 RegisterHook: () => {},
                 UnregisterHook: () => {},
-                Appearance: CurrentCharacter.Appearance.map(item => ({...item})),
-                Pose: CurrentCharacter.Pose ? [...CurrentCharacter.Pose] : [],
                 Name: ""  // Clear the name
             };
+
+            // 3. Load the bundle onto the dummy character
+            ServerAppearanceLoadFromBundle(
+                displayChar,
+                CurrentCharacter.AssetFamily,
+                appearanceBundle,
+                CurrentCharacter.MemberNumber
+            );
 
             // Clear interactive properties
             displayChar.FocusGroup = null;
@@ -1609,7 +1498,7 @@ function initMod() {
                     if (i < outfits.length - 1 && !outfits[i+1].isFolder) { // Not last outfit and next item is not a folder
                         DrawButton(1710, yPos + 5, 50, 50, "↓", "White", "");
                     }
-                    
+        
                     // Calculate outfit number (exclude folders from numbering)
                     const outfitNumber = i + 1 - folderEntries.length;
                     DrawButton(1210, yPos, 490, 60, `${outfitNumber}. ${prefix}${outfit.name}`, "White");
@@ -1633,7 +1522,12 @@ function initMod() {
 
             // If not hovering any outfit, restore help text and original appearance
             if (!isHoveringAnyOutfit) {
-                displayChar.Appearance = CurrentCharacter.Appearance.map(item => ({...item}));  // Deep copy
+                displayChar.Appearance = CurrentCharacter.Appearance.map(item => ({
+                    ...item,
+                    Property: item.Property ? { ...item.Property } : undefined,
+                    Craft: item.Craft ? { ...item.Craft } : undefined,
+                    Color: Array.isArray(item.Color) ? [...item.Color] : item.Color
+                }));  // Deep copy
                 displayChar.Pose = CurrentCharacter.Pose ? [...CurrentCharacter.Pose] : [];  // Copy current poses
                 CharacterLoadCanvas(displayChar);
             }
@@ -1663,6 +1557,11 @@ function initMod() {
             if (totalPages > 1) {
                 const paginationY = 930;
                 
+                // First page button - only show if on page 3 or higher
+                if (currentPage >= 2) {
+                    DrawButton(1100, paginationY, 100, 60, "First", "White");
+                }
+                
                 // Previous page button
                 if (currentPage > 0) {
                     DrawButton(1200, paginationY, 100, 60, "<", "White");
@@ -1676,6 +1575,11 @@ function initMod() {
                 // Next page button
                 if (currentPage < totalPages - 1) {
                     DrawButton(1600, paginationY, 100, 60, ">", "White");
+                }
+                
+                // Last page button - only show if not on the last or second-to-last page
+                if (currentPage < totalPages - 2) {
+                    DrawButton(1700, paginationY, 100, 60, "Last", "White");
                 }
             }
 
@@ -1834,7 +1738,8 @@ function initMod() {
 
                 // First check for outfit with same name in ANY folder
                 const sameNameOutfits = outfitStorage.outfits.filter(o => o.name === outfitName);
-                
+                let overwriteIndex = -1;
+
                 if (sameNameOutfits.length > 0) {
                     // Check if it exists in current folder
                     const existingInCurrentFolder = sameNameOutfits.find(o => 
@@ -1852,17 +1757,13 @@ function initMod() {
                             ((o.folder === currentFolder) || (!o.folder && currentFolder === "Main")));
                             
                         // We'll use this index to overwrite the outfit in place
-                        var overwriteIndex = existingIndex;
+                        overwriteIndex = existingIndex;
                     } else {
                         // Outfit exists in different folder(s) - prevent saving with same name
                         const otherFolders = sameNameOutfits.map(o => o.folder || "Main").join(", ");
                         alert(`An outfit named "${outfitName}" already exists in folder(s): ${otherFolders}.\nPlease choose a different name.`);
                         return;
                     }
-                } else {
-                    ShowOutfitNotification(`Outfit "${outfitName}" has been saved to folder "${currentFolder}"`);
-                    // New outfit will be pushed to the array (no overwriteIndex)
-                    var overwriteIndex = -1;
                 }
 
                 // Convert appearance to BCX format outfit data
@@ -1989,13 +1890,8 @@ function initMod() {
                             // Skip if the group is locked
                             if (InventoryItemHasEffect(InventoryGet(C, item.Group), "Lock")) continue;
                             
-                            const bondageSkill = Player.Skill.find(skill => skill.Type === "Bondage");
-                            const newItem = {
-                                Asset: asset,
-                                Color: item.Color || "Default",
-                                Property: item.Property ? {...item.Property} : undefined,
-                                Difficulty: asset.Difficulty !== undefined ? asset.Difficulty + (bondageSkill ? bondageSkill.Level : 0) : 0
-                            };
+                            const newItem = CharacterAppearanceSetItem(C, item.Group, asset, item.Color);
+                            if (item.Property) newItem.Property = {...item.Property};
                             if (item.Craft) newItem.Craft = item.Craft;
                             C.Appearance.push(newItem);
                         }
@@ -2010,36 +1906,12 @@ function initMod() {
                 }
 
                 // Clear existing items, but keep cosplay items
-                for (let A = C.Appearance.length - 1; A >= 0; A--) {
-                    const item = C.Appearance[A];
-                    // Keep cosplay items and items that can't be removed
-                    if (!item.Asset.Group.AllowNone || 
-                        item.Asset.Group.Category !== "Appearance" || 
-                        item.Asset.Group.BodyCosplay) {
-                        continue;
-                    }
-                    C.Appearance.splice(A, 1);
-                }
+                CharacterAppearanceNaked(C);
 
                 // Check if outfit has any hair items
                 const hasHairItems = outfitData.some(item => 
                     item.Group === "HairFront" || item.Group === "HairBack"
                 );
-
-                // First, handle hair items if isHairOnlyOutfit is true
-                if (isHairOnlyOutfit) {
-                    // Only remove existing hair if we have hair items to replace them with
-                    if (hasHairItems) {
-                        for (let A = C.Appearance.length - 1; A >= 0; A--) {
-                            const item = C.Appearance[A];
-                            if ((item.Asset.Group.Name === "HairFront" || item.Asset.Group.Name === "HairBack") && 
-                                !InventoryItemHasEffect(InventoryGet(C, item.Asset.Group.Name), "Lock")) {
-                                C.Appearance.splice(A, 1);
-                            }
-                        }
-                    }
-                    // If no hair items in outfit, keep existing hair
-                }
 
                 // Remove existing items except locked and blocked body cosplay
                 const groupsToReplace = new Set(outfitData.map(item => item.Group));
@@ -2051,8 +1923,7 @@ function initMod() {
                     // Keep blocked body cosplay
                     (item.Asset.Group.BodyCosplay && CurrentCharacter.OnlineSharedSettings?.BlockBodyCosplay) ||
                     // Keep hair if applyHairWithOutfit is false or if isHairOnlyOutfit and no hair items in outfit
-                    ((!applyHairWithOutfit || (isHairOnlyOutfit && !hasHairItems)) && 
-                     (item.Asset.Group.Name === "HairFront" || item.Asset.Group.Name === "HairBack")) ||
+                    (!applyHairWithOutfit && (item.Asset.Group.Name === "HairFront" || item.Asset.Group.Name === "HairBack")) ||
                     // Keep items that aren't clothing, items, body markings, or hair
                     !(item.Asset.Group.Clothing ||
                       item.Asset.Group.Name.includes("Item") ||
@@ -2076,13 +1947,8 @@ function initMod() {
                     // Skip non-hair items if in hair-only mode
                     if (isHairOnlyOutfit && !(item.Group === "HairFront" || item.Group === "HairBack")) continue;
 
-                    const bondageSkill = Player.Skill.find(skill => skill.Type === "Bondage");
-                    const newItem = {
-                        Asset: asset,
-                        Color: item.Color || "Default",
-                        Property: item.Property ? {...item.Property} : undefined,
-                        Difficulty: asset.Difficulty !== undefined ? asset.Difficulty + (bondageSkill ? bondageSkill.Level : 0) : 0
-                    };
+                    const newItem = CharacterAppearanceSetItem(C, item.Group, asset, item.Color);
+                    if (item.Property) newItem.Property = {...item.Property};
                     if (item.Craft) newItem.Craft = item.Craft;
                     C.Appearance.push(newItem);
                 }
@@ -2149,11 +2015,8 @@ function initMod() {
         }
 
         function ShowOutfitNotification(message, duration = 3) {
-            ServerBeep = {
-                Message: message,
-                Timer: CommonTime() + (duration * 1000),  // Convert milliseconds to seconds
-                ChatRoomName: null
-            };
+            // Use the new beep system, always silent
+            ServerShowBeep(message, duration * 1000, { silent: true });
         }
         
         // Inside initMod function, after other function definitions
@@ -2218,7 +2081,7 @@ function initMod() {
             // Otherwise use normal darkness calculation
             return next(args);
         });
-        
+
         // Add these functions to your code
         function backupOutfits() {
             try {
