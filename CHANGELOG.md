@@ -2,6 +2,9 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v0.7.6.2]
+- Reverted a change to not use `CharacterAppearanceNaked` to not remove existing cosplay items when applying outfits as `CharacterAppearanceNaked` still removes them if you apply an outfit to yourself or others that allow for cosplay changes.
+
 ## [v0.7.6.1]
 - Fixed initialization of `C.Appearance` to always be an array for compatibility with the game.
 - Used `ServerAppearanceBundle` and `ServerAppearanceLoadFromBundle` to copy the CurrentCharacter's appearance to the display character.
