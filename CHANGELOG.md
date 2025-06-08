@@ -1,9 +1,21 @@
 # Changelog
 
-All notable changes to this project will be documented in this file.
+Any changes made to the addon will be here for easier documentation.
+
+## [v0.7.7]
+- When BCOM detects a version change (which will happen starting with this version), a private message will be sent to the player notifying them and to look at the changelog if they desire.
+- Changed how cosplay items are detected.  Used `asset.BodyCosplay` instead of `asset.Group.BodyCosplay` because it seems the surface level value is more accurate? (See `HairAccessory1` + `BunnyEars2`). Depending on any potential feedback, this may change back to the old behavior or I might include checking for both cases.
+- Added message in the help text to display how many outfit slots you have remaining
+- Reverted some changes made in how outfits are loaded as it was for some reason changing the Y-position of the `CurrentCharacter` and/or Player before quickly fixing itself when an outfit is applied.
+- Changed how the Outfit Manager is initialized and waits until the Player is initialized after login before initializing the Outfit Manager itself.  This was done so the remaining outfit slots can be properly calculated as it needs to read the proper key labeled with the player's member number.
+- Added a "New!" text with the Outfit Manager icon with a glow if you haven't opened the Outfit Manager before as a way to show new users. Starting with this version, all users will see this.
+- Added checks when creating new folders or renaming them so certain folder names cannot be used.
+- Added more robust outfit code checking when importing from BCX codes
+- Added some additional error handling
 
 ## [v0.7.6.2]
 - Reverted a change to not use `CharacterAppearanceNaked` to not remove existing cosplay items when applying outfits as `CharacterAppearanceNaked` still removes them if you apply an outfit to yourself or others that allow for cosplay changes.
+
 
 ## [v0.7.6.1]
 - Fixed initialization of `C.Appearance` to always be an array for compatibility with the game.

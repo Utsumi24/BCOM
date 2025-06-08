@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         BC Outfit Manager
 // @namespace https://www.bondageprojects.com/
-// @version      0.7.6.2
+// @version      0.7.7
 // @description  Outfit management system for Bondage Club
 // @author       Utsumi
 // @match https://bondageprojects.elementfx.com/*
@@ -13,18 +13,144 @@
 // @run-at document-end
 // ==/UserScript==
 
+//Don't judge me for using AI to make this. T_T
+
 var bcModSdk=function(){"use strict";const o="1.2.0";function e(o){alert("Mod ERROR:\n"+o);const e=new Error(o);throw console.error(e),e}const t=new TextEncoder;function n(o){return!!o&&"object"==typeof o&&!Array.isArray(o)}function r(o){const e=new Set;return o.filter((o=>!e.has(o)&&e.add(o)))}const i=new Map,a=new Set;function c(o){a.has(o)||(a.add(o),console.warn(o))}function s(o){const e=[],t=new Map,n=new Set;for(const r of f.values()){const i=r.patching.get(o.name);if(i){e.push(...i.hooks);for(const[e,a]of i.patches.entries())t.has(e)&&t.get(e)!==a&&c(`ModSDK: Mod '${r.name}' is patching function ${o.name} with same pattern that is already applied by different mod, but with different pattern:\nPattern:\n${e}\nPatch1:\n${t.get(e)||""}\nPatch2:\n${a}`),t.set(e,a),n.add(r.name)}}e.sort(((o,e)=>e.priority-o.priority));const r=function(o,e){if(0===e.size)return o;let t=o.toString().replaceAll("\r\n","\n");for(const[n,r]of e.entries())t.includes(n)||c(`ModSDK: Patching ${o.name}: Patch ${n} not applied`),t=t.replaceAll(n,r);return(0,eval)(`(${t})`)}(o.original,t);let i=function(e){var t,i;const a=null===(i=(t=m.errorReporterHooks).hookChainExit)||void 0===i?void 0:i.call(t,o.name,n),c=r.apply(this,e);return null==a||a(),c};for(let t=e.length-1;t>=0;t--){const n=e[t],r=i;i=function(e){var t,i;const a=null===(i=(t=m.errorReporterHooks).hookEnter)||void 0===i?void 0:i.call(t,o.name,n.mod),c=n.hook.apply(this,[e,o=>{if(1!==arguments.length||!Array.isArray(e))throw new Error(`Mod ${n.mod} failed to call next hook: Expected args to be array, got ${typeof o}`);return r.call(this,o)}]);return null==a||a(),c}}return{hooks:e,patches:t,patchesSources:n,enter:i,final:r}}function l(o,e=!1){let r=i.get(o);if(r)e&&(r.precomputed=s(r));else{let e=window;const a=o.split(".");for(let t=0;t<a.length-1;t++)if(e=e[a[t]],!n(e))throw new Error(`ModSDK: Function ${o} to be patched not found; ${a.slice(0,t+1).join(".")} is not object`);const c=e[a[a.length-1]];if("function"!=typeof c)throw new Error(`ModSDK: Function ${o} to be patched not found`);const l=function(o){let e=-1;for(const n of t.encode(o)){let o=255&(e^n);for(let e=0;e<8;e++)o=1&o?-306674912^o>>>1:o>>>1;e=e>>>8^o}return((-1^e)>>>0).toString(16).padStart(8,"0").toUpperCase()}(c.toString().replaceAll("\r\n","\n")),d={name:o,original:c,originalHash:l};r=Object.assign(Object.assign({},d),{precomputed:s(d),router:()=>{},context:e,contextProperty:a[a.length-1]}),r.router=function(o){return function(...e){return o.precomputed.enter.apply(this,[e])}}(r),i.set(o,r),e[r.contextProperty]=r.router}return r}function d(){for(const o of i.values())o.precomputed=s(o)}function p(){const o=new Map;for(const[e,t]of i)o.set(e,{name:e,original:t.original,originalHash:t.originalHash,sdkEntrypoint:t.router,currentEntrypoint:t.context[t.contextProperty],hookedByMods:r(t.precomputed.hooks.map((o=>o.mod))),patchedByMods:Array.from(t.precomputed.patchesSources)});return o}const f=new Map;function u(o){f.get(o.name)!==o&&e(`Failed to unload mod '${o.name}': Not registered`),f.delete(o.name),o.loaded=!1,d()}function g(o,t){o&&"object"==typeof o||e("Failed to register mod: Expected info object, got "+typeof o),"string"==typeof o.name&&o.name||e("Failed to register mod: Expected name to be non-empty string, got "+typeof o.name);let r=`'${o.name}'`;"string"==typeof o.fullName&&o.fullName||e(`Failed to register mod ${r}: Expected fullName to be non-empty string, got ${typeof o.fullName}`),r=`'${o.fullName} (${o.name})'`,"string"!=typeof o.version&&e(`Failed to register mod ${r}: Expected version to be string, got ${typeof o.version}`),o.repository||(o.repository=void 0),void 0!==o.repository&&"string"!=typeof o.repository&&e(`Failed to register mod ${r}: Expected repository to be undefined or string, got ${typeof o.version}`),null==t&&(t={}),t&&"object"==typeof t||e(`Failed to register mod ${r}: Expected options to be undefined or object, got ${typeof t}`);const i=!0===t.allowReplace,a=f.get(o.name);a&&(a.allowReplace&&i||e(`Refusing to load mod ${r}: it is already loaded and doesn't allow being replaced.\nWas the mod loaded multiple times?`),u(a));const c=o=>{let e=g.patching.get(o.name);return e||(e={hooks:[],patches:new Map},g.patching.set(o.name,e)),e},s=(o,t)=>(...n)=>{var i,a;const c=null===(a=(i=m.errorReporterHooks).apiEndpointEnter)||void 0===a?void 0:a.call(i,o,g.name);g.loaded||e(`Mod ${r} attempted to call SDK function after being unloaded`);const s=t(...n);return null==c||c(),s},p={unload:s("unload",(()=>u(g))),hookFunction:s("hookFunction",((o,t,n)=>{"string"==typeof o&&o||e(`Mod ${r} failed to patch a function: Expected function name string, got ${typeof o}`);const i=l(o),a=c(i);"number"!=typeof t&&e(`Mod ${r} failed to hook function '${o}': Expected priority number, got ${typeof t}`),"function"!=typeof n&&e(`Mod ${r} failed to hook function '${o}': Expected hook function, got ${typeof n}`);const s={mod:g.name,priority:t,hook:n};return a.hooks.push(s),d(),()=>{const o=a.hooks.indexOf(s);o>=0&&(a.hooks.splice(o,1),d())}})),patchFunction:s("patchFunction",((o,t)=>{"string"==typeof o&&o||e(`Mod ${r} failed to patch a function: Expected function name string, got ${typeof o}`);const i=l(o),a=c(i);n(t)||e(`Mod ${r} failed to patch function '${o}': Expected patches object, got ${typeof t}`);for(const[n,i]of Object.entries(t))"string"==typeof i?a.patches.set(n,i):null===i?a.patches.delete(n):e(`Mod ${r} failed to patch function '${o}': Invalid format of patch '${n}'`);d()})),removePatches:s("removePatches",(o=>{"string"==typeof o&&o||e(`Mod ${r} failed to patch a function: Expected function name string, got ${typeof o}`);const t=l(o);c(t).patches.clear(),d()})),callOriginal:s("callOriginal",((o,t,n)=>{"string"==typeof o&&o||e(`Mod ${r} failed to call a function: Expected function name string, got ${typeof o}`);const i=l(o);return Array.isArray(t)||e(`Mod ${r} failed to call a function: Expected args array, got ${typeof t}`),i.original.apply(null!=n?n:globalThis,t)})),getOriginalHash:s("getOriginalHash",(o=>{"string"==typeof o&&o||e(`Mod ${r} failed to get hash: Expected function name string, got ${typeof o}`);return l(o).originalHash}))},g={name:o.name,fullName:o.fullName,version:o.version,repository:o.repository,allowReplace:i,api:p,loaded:!0,patching:new Map};return f.set(o.name,g),Object.freeze(p)}function h(){const o=[];for(const e of f.values())o.push({name:e.name,fullName:e.fullName,version:e.version,repository:e.repository});return o}let m;const y=void 0===window.bcModSdk?window.bcModSdk=function(){const e={version:o,apiVersion:1,registerMod:g,getModsInfo:h,getPatchingInfo:p,errorReporterHooks:Object.seal({apiEndpointEnter:null,hookEnter:null,hookChainExit:null})};return m=e,Object.freeze(e)}():(n(window.bcModSdk)||e("Failed to init Mod SDK: Name already in use"),1!==window.bcModSdk.apiVersion&&e(`Failed to init Mod SDK: Different version already loaded ('1.2.0' vs '${window.bcModSdk.version}')`),window.bcModSdk.version!==o&&alert(`Mod SDK warning: Loading different but compatible versions ('1.2.0' vs '${window.bcModSdk.version}')\nOne of mods you are using is using an old version of SDK. It will work for now but please inform author to update`),window.bcModSdk);return"undefined"!=typeof exports&&(Object.defineProperty(exports,"__esModule",{value:!0}),exports.default=y),y}();
 
-const VERSION_NUMBER = "0.7.6.2";
+const VERSION_NUMBER = "0.7.7";
 
 let modInitialized = false;
 
+const STORAGE_PREFIX = "OutfitManager_"; // Prefix for storing outfits
+
+// Version update notification system
+function checkVersionUpdate() {
+    try {
+        const memberNumber = Player.MemberNumber;
+        const storageKey = `${STORAGE_PREFIX}${memberNumber}`;
+        const storageData = localStorage.getItem(storageKey);
+        
+        let outfitStorage;
+        let isFirstTime = false;
+        
+        if (storageData) {
+            outfitStorage = JSON.parse(storageData);
+            if (!outfitStorage.settings) outfitStorage.settings = {};
+        } else {
+            outfitStorage = { outfits: [], folders: ["Main"], settings: {} };
+            isFirstTime = true;
+        }
+        
+        const storedVersion = outfitStorage.settings.lastVersion;
+        const currentVersion = VERSION_NUMBER;
+        
+        // Check if this is a version update
+        if (!isFirstTime && (!storedVersion || storedVersion !== currentVersion)) {
+            // Send private message notification about update
+            setTimeout(() => {
+                const updateMessage = `BC Outfit Manager has been updated to v${currentVersion}!\n\n` +
+                    `New changes have been added. ` +
+                    `You can view the full changelog at:\n` +
+                    `https://github.com/Utsumi24/BCOM/blob/main/CHANGELOG.md\n\n`;
+                    `If you have any crashes or issues, please @Utsumi on either the BC Scripting Community or main BC Discord servers.`;
+                
+                // Create a beep entry that appears like a private message
+                const beepIdx = FriendListBeepLog.length;
+                FriendListBeepLog.push({
+                    MemberNumber: Player.MemberNumber || -1, // System message
+                    MemberName: "BCOM",
+                    ChatRoomName: "Update",
+                    ChatRoomSpace: "",
+                    Private: true,
+                    Sent: false,
+                    Time: new Date(),
+                    Message: updateMessage
+                });
+                
+                // Show beep notification with click handler to open the message
+                ServerShowBeep(`Update notification from BC Outfit Manager v${currentVersion}`, 15000, {
+                    onClick: () => {
+                        FriendListShowBeep(beepIdx);
+                    }
+                });
+                
+                console.log(`BCOM: Updated from v${storedVersion} to v${currentVersion}`);
+            }, 2000); // Delay to ensure game is fully loaded
+        } else if (isFirstTime) {
+            console.log(`BCOM: First time installation - v${currentVersion}`);
+        }
+        
+        // Update stored version
+        outfitStorage.settings.lastVersion = currentVersion;
+        localStorage.setItem(storageKey, JSON.stringify(outfitStorage));
+        
+    } catch (error) {
+        console.error("BCOM: Error checking version update", error);
+    }
+}
+
+// Add this function to clean up any corrupted data in storage
+function cleanupStorageData() {
+    try {
+        const memberNumber = Player.MemberNumber;
+        const storageKey = `${STORAGE_PREFIX}${memberNumber}`;
+        const storageData = localStorage.getItem(storageKey);
+        
+        if (storageData) {
+            const outfitStorage = JSON.parse(storageData);
+            let needsSave = false;
+            
+            // Remove any UI-only folder entries
+            if (outfitStorage.folders) {
+                const originalLength = outfitStorage.folders.length;
+                outfitStorage.folders = outfitStorage.folders.filter(folder => 
+                    folder !== "⬆️ Return to Main Folder" &&
+                    folder !== "Return to Main Folder" &&
+                    !folder.startsWith("⬆️") // General case for any back button that got saved
+                );
+                
+                if (outfitStorage.folders.length !== originalLength) {
+                    console.info(`BCOM: Cleaned up ${originalLength - outfitStorage.folders.length} invalid folder entries`);
+                    needsSave = true;
+                }
+            }
+            
+            // Ensure we always have a Main folder
+            if (!outfitStorage.folders?.includes("Main")) {
+                outfitStorage.folders = outfitStorage.folders || [];
+                outfitStorage.folders.unshift("Main");
+                needsSave = true;
+            }
+            
+            // Save if changes were made
+            if (needsSave) {
+                localStorage.setItem(storageKey, JSON.stringify(outfitStorage));
+                console.info("BCOM: Storage data cleaned up successfully");
+            }
+            else{
+                console.info("BCOM: Storage data is clean. No changes were made.");
+            }
+        }
+    } catch (error) {
+        console.error("BCOM: Error cleaning up storage data", error);
+    }
+}
+
 function initMod() {
     if (modInitialized) return;
+    modInitialized = true;
+
+    console.info("BCOM: Successfully initialized.  Version: " + VERSION_NUMBER);
+
+            // Clean up any corrupted data in storage
+        cleanupStorageData();
+        
+        // Check for version updates
+        checkVersionUpdate();
 
     try {
         if (!window.bcModSdk?.registerMod) {
-            console.error('OutfitManager: Mod SDK not available');
+            console.error('BCOM: Mod SDK not available');
             return;
         }
 
@@ -39,64 +165,6 @@ function initMod() {
                 allowReplace: true
             }
         );
-
-        // Hook the LoginResponse function
-        modApi.hookFunction("LoginResponse", 0, (args, next) => {
-            const [response] = args;
-
-            if (response?.Name && !modInitialized) {
-                modInitialized = true;
-                console.info("OutfitManager: Initializing after successful login");
-                
-                // Clean up any corrupted data in storage
-                cleanupStorageData();
-            }
-            return next(args);
-        });
-
-        // Add this function to clean up any corrupted data in storage
-        function cleanupStorageData() {
-            try {
-                const memberNumber = Player.MemberNumber;
-                const storageKey = `${STORAGE_PREFIX}${memberNumber}`;
-                const storageData = localStorage.getItem(storageKey);
-                
-                if (storageData) {
-                    const outfitStorage = JSON.parse(storageData);
-                    let needsSave = false;
-                    
-                    // Remove any UI-only folder entries
-                    if (outfitStorage.folders) {
-                        const originalLength = outfitStorage.folders.length;
-                        outfitStorage.folders = outfitStorage.folders.filter(folder => 
-                            folder !== "⬆️ Return to Main Folder" &&
-                            folder !== "Return to Main Folder" &&
-                            !folder.startsWith("⬆️") // General case for any back button that got saved
-                        );
-                        
-                        if (outfitStorage.folders.length !== originalLength) {
-                            console.info(`OutfitManager: Cleaned up ${originalLength - outfitStorage.folders.length} invalid folder entries`);
-                            needsSave = true;
-                        }
-                    }
-                    
-                    // Ensure we always have a Main folder
-                    if (!outfitStorage.folders?.includes("Main")) {
-                        outfitStorage.folders = outfitStorage.folders || [];
-                        outfitStorage.folders.unshift("Main");
-                        needsSave = true;
-                    }
-                    
-                    // Save if changes were made
-                    if (needsSave) {
-                        localStorage.setItem(storageKey, JSON.stringify(outfitStorage));
-                        console.info("OutfitManager: Storage data cleaned up successfully");
-                    }
-                }
-            } catch (error) {
-                console.error("OutfitManager: Error cleaning up storage data", error);
-            }
-        }
 
         const OUTFIT_PRIORITIES = {
             UI_INIT: 6,          // Higher than most UI mods
@@ -132,7 +200,6 @@ function initMod() {
         // Controls whether to only apply hair, ignoring other items
         let hairOnly = false;
 
-        const STORAGE_PREFIX = "OutfitManager_"; // Prefix for storing outfits
         const OUTFITS_PER_PAGE = 8;  // Number of outfits to display per page
         let DialogOutfitPage = 0; // Current page of outfits being displayed
 
@@ -151,6 +218,15 @@ function initMod() {
                 // Check if we have permission to modify the character's outfit
                 const hasPermission = CurrentCharacter.MemberNumber === Player.MemberNumber || CurrentCharacter.AllowItem;
                 
+                const memberNumber = Player.MemberNumber;
+                const storageKey = `${STORAGE_PREFIX}${memberNumber}`;
+                const storageData = localStorage.getItem(storageKey);
+                const outfitStorage = storageData ? JSON.parse(storageData) : { outfits: [], folders: ["Main"], settings: {} };
+                if (!outfitStorage.settings) outfitStorage.settings = {};
+                const isFirstTimeUse = !outfitStorage.settings.hasUsedOutfitManager;
+                const pulseIntensity = isFirstTimeUse ? Math.sin(Date.now() / 500) * 0.5 + 0.5 : 0;
+                const glowColor = `rgba(255, 255, 255, ${pulseIntensity * 0.5})`;
+                
                 // Find dialog panel or create one if it doesn't exist yet
                 let dialogElement = document.getElementById("dialog-button-container");
                 if (!dialogElement) {
@@ -163,43 +239,49 @@ function initMod() {
                 const buttonY = 905; // Standard position at bottom
                 
                 // Use the game's native button creation function
-                const buttonContainer = ElementButton.Create(
-                    "OutfitManagerButton", 
-                    function() {
-                        if (hasPermission) {
-                            // Store current mode before switching
-                            PreviousDialogMode = DialogMenuMode; 
-                            
-                            // Switch to outfits mode
-                            DialogChangeMode("outfits");
-                            DialogMenuButton = [];
-                            
-                            // Clean up button when entering outfit mode
-                            const button = document.getElementById("OutfitManagerButton");
-                            if (button) {
-                                window.removeEventListener("resize", updatePositionFunction);
-                                button.remove();
-                            }
-                        } else {
-                            ShowOutfitNotification("You don't have permission to interact with this player");
-                        }
-                    },
-                    {
-                        image: "Icons/Dress.png",
-                        labelPosition: "bottom",
-                        tooltipPosition: "right",
-                        tooltip: hasPermission ? "Outfit Manager" : "You don't have permission to interact with this player",
+                let buttonContainer;
+                try {
+                    if (typeof ElementButton?.Create !== 'function') {
+                        console.error("BCOM: ElementButton.Create not available, cannot create outfit button");
+                        return next(args);
                     }
-                );
+                    
+                    buttonContainer = ElementButton.Create(
+                        "OutfitManagerButton", 
+                        function() {
+                            if (hasPermission) {
+                                // Store current mode before switching
+                                PreviousDialogMode = DialogMenuMode; 
+                                
+                                // Switch to outfits mode
+                                if (typeof DialogChangeMode === 'function') {
+                                    DialogChangeMode("outfits");
+                                    DialogMenuButton = [];
+                                }
+                                
+                                // Clean up button when entering outfit mode
+                                const button = document.getElementById("OutfitManagerButton");
+                                if (button) {
+                                    window.removeEventListener("resize", updatePositionFunction);
+                                    button.remove();
+                                }
+                            } else {
+                                ShowOutfitNotification("You don't have permission to interact with this player");
+                            }
+                        },
+                        {
+                            image: "Icons/Dress.png",
+                            labelPosition: "bottom",
+                            tooltipPosition: "right",
+                            tooltip: hasPermission ? "Outfit Manager (BCOM)" : "You don't have permission to interact with this player",
+                        }
+                    );
+                } catch (error) {
+                    console.error("BCOM: Failed to create outfit button:", error);
+                    return next(args);
+                }
                 
-                // Add hover effects to match the game's standard button behavior
-                buttonContainer.addEventListener("mouseenter", () => {
-                    buttonContainer.style.backgroundColor = hasPermission ? "cyan" : "pink";
-                });
-                
-                buttonContainer.addEventListener("mouseleave", () => {
-                    buttonContainer.style.backgroundColor = hasPermission ? "white" : "pink";
-                });
+                // Hover effects are now handled in the remove function setup above
                 
                 // Set initial background color based on permission
                 buttonContainer.style.backgroundColor = hasPermission ? "white" : "pink";
@@ -210,18 +292,32 @@ function initMod() {
                 
                 // Create a single function reference for position updates
                 const updatePositionFunction = () => {
-                    ElementPositionFixed(buttonContainer, buttonX, buttonY, BUTTON_SIZE, BUTTON_SIZE);
-                    // Ensure z-index is maintained after repositioning
-                    buttonContainer.style.zIndex = "2000";
+                    if (typeof ElementPositionFixed === 'function' && buttonContainer) {
+                        ElementPositionFixed(buttonContainer, buttonX, buttonY, BUTTON_SIZE, BUTTON_SIZE);
+                        // Ensure z-index is maintained after repositioning
+                        buttonContainer.style.zIndex = "2000";
+                    }
                 };
                 
-                // Add resize listener
-                window.addEventListener("resize", updatePositionFunction);
+                // Add resize listener using our manager
+                const removeResizeListener = eventListenerManager.add(window, "resize", updatePositionFunction);
+                
+                // Add hover listeners using our manager
+                const removeMouseEnter = eventListenerManager.add(buttonContainer, "mouseenter", () => {
+                    buttonContainer.style.backgroundColor = hasPermission ? "cyan" : "pink";
+                });
+                
+                const removeMouseLeave = eventListenerManager.add(buttonContainer, "mouseleave", () => {
+                    buttonContainer.style.backgroundColor = hasPermission ? "white" : "pink";
+                });
                 
                 // Save the original remove method to ensure we clean up event listeners
                 const originalRemove = buttonContainer.remove;
                 buttonContainer.remove = function() {
-                    window.removeEventListener("resize", updatePositionFunction);
+                    removeResizeListener();
+                    removeMouseEnter();
+                    removeMouseLeave();
+                    animationManager.stop("buttonGlow");
                     originalRemove.apply(this);
                 };
                 
@@ -230,94 +326,58 @@ function initMod() {
                 
                 // Use ElementPositionFixed after adding to DOM
                 ElementPositionFixed(buttonContainer, buttonX, buttonY, BUTTON_SIZE, BUTTON_SIZE);
+
+                // Add to button style
+                if (isFirstTimeUse) {
+                    const stopGlowAnimation = animationManager.start(() => {
+                        if (!document.body.contains(buttonContainer)) {
+                            animationManager.stop("buttonGlow");
+                            return;
+                        }
+                        const t = Date.now() / 500;
+                        const pulse = Math.sin(t) * 0.5 + 0.5; // 0 to 1
+                        // Gold and white layered glow
+                        const goldGlow = `0 0 32px 8px rgba(255, 215, 0, ${0.4 + 0.4 * pulse})`;
+                        const whiteGlow = `0 0 48px 16px rgba(255,255,255,${0.2 + 0.3 * pulse})`;
+                        buttonContainer.style.boxShadow = `${goldGlow}, ${whiteGlow}`;
+                        // Optional: pulse background color
+                        buttonContainer.style.backgroundColor = `rgba(255,255,255,${0.85 + 0.15 * pulse})`;
+                    }, "buttonGlow");
+                }
+
+                // Add "New!" label
+                if (isFirstTimeUse) {
+                    const newLabel = document.createElement("div");
+                    newLabel.style.position = "absolute";
+                    newLabel.style.left = "50%";
+                    newLabel.style.bottom = "100%";
+                    newLabel.style.transform = "translateX(-50%) translateY(-8px)"; // 8px above the button
+                    newLabel.style.color = "#FFD700";
+                    newLabel.style.fontSize = "1.2vw"; // Responsive font size that scales with viewport width
+                    newLabel.style.fontWeight = "bold";
+                    newLabel.style.zIndex = "2001";
+                    newLabel.textContent = "New!";
+                    buttonContainer.appendChild(newLabel);
+                }
+
+                const removeClickListener = eventListenerManager.add(buttonContainer, "click", () => {
+                    outfitStorage.settings.hasUsedOutfitManager = true;
+                    localStorage.setItem(storageKey, JSON.stringify(outfitStorage));
+                    // Remove the glow and "New!" label immediately if you want
+                    buttonContainer.style.boxShadow = "";
+                    buttonContainer.style.backgroundColor = "";
+                    const newLabel = buttonContainer.querySelector("div");
+                    if (newLabel) newLabel.remove();
+                    animationManager.stop("buttonGlow");
+                });
              }
 
              if (DialogMenuMode === "outfits") {
-                 // Create a style element to handle DOM dialog elements only
-                 let hideDialogStyle = document.getElementById("outfit-manager-style");
-                 if (!hideDialogStyle) {
-                     hideDialogStyle = document.createElement("style");
-                     hideDialogStyle.id = "outfit-manager-style";
-                     document.head.appendChild(hideDialogStyle);
-                 }
-                 
-                 // Add CSS rules to hide DOM-based dialogs only
-                 hideDialogStyle.textContent = `
-                     /* Hide dialog DOM elements except our own */
-                     #dialog-expression, 
-                     #dialog-inventory, 
-                     .dialog-character-container, 
-                     .dialog-character, 
-                     .dialog-character-zone,
-                     .character-label,
-                     #dialog-crafting-container,
-                     #dialog-permission,
-                     #dialog-locking,
-                     #dialog-activities,
-                     #dialog-saved-expressions,
-                     #dialog-pose,
-                     #dialog-pose-status,
-                     #dialog-pose-menubar,
-                     #dialog-pose-button-grid,
-                     #dialog-expression-preset,
-                     #dialog-expression-preset-status,
-                     #dialog-expression-preset-menubar,
-                     #dialog-expression-preset-button-grid,
-                     #dialog-owner-rules,
-                     #dialog-owner-rules-status,
-                     #dialog-owner-rules-menubar,
-                     #dialog-owner-rules-grid {
-                         display: none !important;
-                         visibility: hidden !important;
-                         opacity: 0 !important;
-                         pointer-events: none !important;
-                     }
-                     
-                     /* Ensure the outfit button isn't blocked by expression menus */
-                     #dialog-expression-preset-button-grid,
-                     .dialog-expression-preset-slot,
-                     #dialog-expression-preset {
-                         pointer-events: none !important;
-                         z-index: 1 !important;
-                     }
-                     
-                     /* Ensure our outfit menu is on top */
-                     #dialog-outfit-manager {
-                         z-index: 1000 !important;
-                     }
-                     
-                     /* Ensure our Outfit Manager button is always clickable */
-                     #OutfitManagerButton {
-                         z-index: 2000 !important;
-                         pointer-events: auto !important;
-                     }
-                 `;
-                 
-                 // Also hide specific elements by ID
-                 const hiddenElementIds = [
-                     "dialog-expression", "dialog-expression-status", "dialog-expression-menubar", 
-                     "dialog-expression-menu-left", "dialog-expression-button-grid",
-                     "dialog-inventory", "dialog-inventory-status", "dialog-inventory-grid", 
-                     "dialog-inventory-icon", "dialog-inventory-paginate",
-                     "dialog-pose", "dialog-pose-status", "dialog-pose-menubar", "dialog-pose-button-grid",
-                     "dialog-expression-preset", "dialog-expression-preset-status", 
-                     "dialog-expression-preset-menubar", "dialog-expression-preset-button-grid",
-                     "dialog-owner-rules", "dialog-owner-rules-status", "dialog-owner-rules-menubar", "dialog-owner-rules-grid"
-                 ];
-                 
-                 hiddenElementIds.forEach(id => {
-                     const element = document.getElementById(id);
-                     if (element) element.style.display = "none";
-                 });
-                 
+                 toggleDialogElements(true);
                  DrawOutfitMenu();
                  return;
              } else {
-                 // Remove the style element if not in outfit mode
-                 const hideDialogStyle = document.getElementById("outfit-manager-style");
-                 if (hideDialogStyle) {
-                     hideDialogStyle.remove();
-                 }
+                 toggleDialogElements(false);
              }
 
              return next(args);
@@ -466,8 +526,6 @@ function initMod() {
         
                 // Exit button with matching coordinates
                 if (MouseIn(1885, 15, 90, 90)) {
-                    console.log("Exit button clicked in Outfit Manager");
-                    
                     // Reset all outfit manager modes before calling DialogMenuBack
                     isSortMode = false;
                     isExportMode = false;
@@ -476,71 +534,36 @@ function initMod() {
                     applyHairWithOutfit = false;
                     selectedOutfits = [];
                     
-                    // Remove the style element that hides dialog elements
-                    const styleElement = document.getElementById("outfit-manager-style");
-                    if (styleElement) {
-                        styleElement.remove();
-                        //console.log("Exit button: Removed style element that was hiding dialog elements");
-                    }
-                    
-                    // Make sure all other outfit manager DOM elements are also removed
-                    const outfitManager = document.getElementById("dialog-outfit-manager");
-                    if (outfitManager) {
-                        outfitManager.remove();
-                        //console.log("Exit button: Removed outfit manager dialog container");
-                    }
-                    
-                    // Restore visibility to all specifically hidden elements
-                    const hiddenElementIds = [
-                        "dialog-expression", "dialog-expression-status", "dialog-expression-menubar", 
-                        "dialog-expression-menu-left", "dialog-expression-button-grid",
-                        "dialog-inventory", "dialog-inventory-status", "dialog-inventory-grid", 
-                        "dialog-inventory-icon", "dialog-inventory-paginate",
-                        "dialog-pose", "dialog-pose-status", "dialog-pose-menubar", "dialog-pose-button-grid",
-                        "dialog-expression-preset", "dialog-expression-preset-status", 
-                        "dialog-expression-preset-menubar", "dialog-expression-preset-button-grid",
-                        "dialog-owner-rules", "dialog-owner-rules-status", "dialog-owner-rules-menubar", "dialog-owner-rules-grid"
-                    ];
-                    
-                    hiddenElementIds.forEach(id => {
-                        const element = document.getElementById(id);
-                        if (element) {
-                            element.style.display = "";
-                            element.style.visibility = "";
-                            element.style.opacity = "";
-                            element.style.pointerEvents = "";
-                        }
-                    });
+                    toggleDialogElements(false);
                     
                     // Make sure PreviousDialogMode isn't blank
                     if (!PreviousDialogMode || PreviousDialogMode === "") {
                         PreviousDialogMode = "dialog";
                     }
-                    
+
+                    // If we're in the chatroom
+                    if (CurrentScreen === "ChatRoom") {
+                        // If we want to go back to the dialog screen, use DialogChangeMode
+                        if (PreviousDialogMode === "dialog" || PreviousDialogMode === "items") {
+                            DialogMenuMode = PreviousDialogMode;
+                            if (typeof DialogChangeMode === "function") {
+                                DialogChangeMode(PreviousDialogMode, true);
+                            }
+                            return;
+                        } else {
+                            // Otherwise, exit back to chatroom
+                            DialogMenuBack();
+                            return;
+                        }
+                    }
+
                     // Set target mode to the previous dialog mode
                     DialogMenuMode = PreviousDialogMode;
-                    
+
                     // Force clean change to previous dialog mode
                     if (typeof DialogChangeMode === "function") {
                         DialogChangeMode(PreviousDialogMode, true);
-                        //console.log(`Exit button: Forced DialogChangeMode to ${PreviousDialogMode}`);
                     }
-                    
-                    // Remove the import field last to ensure a clean exit
-                    const importElement = document.getElementById("OutfitManagerImport");
-                    if (importElement) {
-                        importElement.remove();
-                        //console.log("Exit button: Removed import field");
-                    }
-                    
-                    // Check for any additional containers that might exist
-                    ["OutfitManagerImportContainer", "OutfitExportField", "ImportExportContainer"].forEach(id => {
-                        const element = document.getElementById(id);
-                        if (element) {
-                            element.remove();
-                           //console.log(`Exit button: Removed additional container ${id}`);
-                        }
-                    });
                     
                     return;
                 }
@@ -577,18 +600,20 @@ function initMod() {
                         return;
                     }
                     
-                    // Add new folder functionality
-                    let folderName = prompt("Enter new folder name:");
-                    if (folderName && folderName.trim()) {
-                        folderName = folderName.trim();
-                        
-                        // Get storage
-                        const memberNumber = Player.MemberNumber;
-                        const storageKey = `${STORAGE_PREFIX}${memberNumber}`;
-                        const storageData = localStorage.getItem(storageKey);
-                        const outfitStorage = storageData ? 
-                            JSON.parse(storageData) : 
-                            { outfits: [], folders: ["Main"] };
+                    // Get storage first
+                    const memberNumber = Player.MemberNumber;
+                    const storageKey = `${STORAGE_PREFIX}${memberNumber}`;
+                    const storageData = localStorage.getItem(storageKey);
+                    const outfitStorage = storageData ? 
+                        JSON.parse(storageData) : 
+                        { outfits: [], folders: ["Main"], settings: {} };
+                    
+                    // Add new folder functionality with validation
+                    const existingFolders = outfitStorage.folders || ["Main"];
+                    const folderName = InputValidator.promptForName("Enter new folder name:", 'folder', existingFolders);
+                    if (folderName) {
+
+                        if (!outfitStorage.settings) outfitStorage.settings = {};
                         
                         // Check if folder already exists
                         if (!outfitStorage.folders.includes(folderName)) {
@@ -710,10 +735,14 @@ function initMod() {
                                 const outfitStorage = JSON.parse(storageData);
                                 const folders = outfitStorage.folders || ["Main"];
                                 
-                                // Prompt for new folder name
-                                let newName = prompt(`Enter new name for folder "${outfit.name}":`);
-                                if (newName && newName.trim()) {
-                                    newName = newName.trim();
+                                // Prompt for new folder name with validation
+                                const otherFolders = folders.filter(f => f !== outfit.name);
+                                const newName = InputValidator.promptForName(
+                                    `Enter new name for folder "${outfit.name}":`, 
+                                    'folder', 
+                                    otherFolders
+                                );
+                                if (newName) {
                                     
                                     // Check if folder name already exists
                                     if (folders.includes(newName)) {
@@ -860,59 +889,84 @@ function initMod() {
         
                         // Export button (replaces delete button)
                         if (MouseIn(1710, yPos + 5, 50, 50)) {
-                            const outfitData = outfit.data;
-                            if (outfitData) {
+                            const outfitData = outfit?.data;
+                            if (outfitData && typeof navigator?.clipboard?.writeText === 'function') {
                                 navigator.clipboard.writeText(outfitData)
-                                    .then(() => ShowOutfitNotification(`Outfit "${outfit.name}" code copied to clipboard`))
-                                    .catch(() => ShowOutfitNotification("Failed to copy outfit code"));
+                                    .then(() => ShowOutfitNotification(`"${outfit.name}" copied`))
+                                    .catch(() => ShowOutfitNotification("Copy failed"));
+                            } else {
+                                ShowOutfitNotification("Export not available");
                             }
                             return;
                         }
                     } else {
                         // Rename button
                         if (MouseIn(1150, yPos + 5, 50, 50)) {
-                            let newName;
-                            do {
-                                newName = prompt(`Enter new name for outfit "${outfit.name}":`);
-                                if (newName === null) return; // User clicked Cancel
-                            } while (!newName?.trim()); // Keep prompting if empty or only whitespace
-        
                             try {
                                 // Get storage
                                 const memberNumber = Player.MemberNumber;
                                 const storageKey = `${STORAGE_PREFIX}${memberNumber}`;
                                 const storageData = localStorage.getItem(storageKey);
                                 if (!storageData) {
-                                    console.error('Rename failed: No storage found');
+                                    ErrorHandler.showError('No outfit data found for renaming.');
                                     return;
                                 }
         
                                 const outfitStorage = JSON.parse(storageData);
-                                const outfitIndex = outfitStorage.outfits.findIndex(o => o.name === outfit.name);
+                                let outfitIndex = outfitStorage.outfits.findIndex(o => o.name === outfit.name);
                                 if (outfitIndex === -1) {
-                                    console.error('Rename failed: Could not find outfit');
+                                    ErrorHandler.showError('Could not find outfit to rename.');
                                     return;
                                 }
+
+                                // Get existing outfit names for validation (excluding the current outfit)
+                                const existingNames = outfitStorage.outfits
+                                    .filter(o => o.name !== outfit.name)
+                                    .map(o => o.name);
+                                
+                                // Prompt with validation
+                                const newName = InputValidator.promptForName(
+                                    `Enter new name for outfit "${outfit.name}":`, 
+                                    'outfit', 
+                                    existingNames
+                                );
+                                if (!newName) return; // User cancelled or validation failed
         
-                                // Check if new name already exists
-                                if (outfitStorage.outfits.some(o => o.name === newName)) {
+                                // Check if new name already exists (secondary check)
+                                const existingOutfit = outfitStorage.outfits.find(o => o.name === newName);
+                                if (existingOutfit) {
                                     if (!confirm(`Outfit "${newName}" already exists. Do you want to overwrite it?`)) {
                                         return;
                                     }
                                     // Remove existing outfit with same name
                                     const existingIndex = outfitStorage.outfits.findIndex(o => o.name === newName);
-                                    outfitStorage.outfits.splice(existingIndex, 1);
+                                    if (existingIndex >= 0) {
+                                        outfitStorage.outfits.splice(existingIndex, 1);
+                                        // Update outfitIndex if necessary
+                                        if (existingIndex < outfitIndex) {
+                                            outfitIndex--;
+                                        }
+                                    }
                                 }
         
-                                // Update the name
-                                outfitStorage.outfits[outfitIndex].name = newName;
+                                // Validate outfitIndex is still valid after potential deletion
+                                if (outfitIndex >= 0 && outfitIndex < outfitStorage.outfits.length) {
+                                    // Update the name
+                                    outfitStorage.outfits[outfitIndex].name = newName;
+                                } else {
+                                    ErrorHandler.showError('Outfit index became invalid during rename operation.');
+                                    return;
+                                }
         
                                 // Save back to storage
                                 localStorage.setItem(storageKey, JSON.stringify(outfitStorage));
                                 ShowOutfitNotification(`Outfit renamed to "${newName}"`);
         
                             } catch (error) {
-                                console.error('Rename failed:', error);
+                                ErrorHandler.showError(
+                                    'Failed to rename outfit. The outfit data may be corrupted.',
+                                    error
+                                );
                             }
                             return;
                         }
@@ -981,7 +1035,7 @@ function initMod() {
             if (mode === "outfits") {
                 // Store the mode we're coming from
                 PreviousDialogMode = DialogMenuMode;
-                console.log("Storing previous mode:", DialogMenuMode);
+                //console.log("Storing previous mode:", DialogMenuMode);
                 
                 // Handle the mode change ourselves
                 DialogMenuMapping[DialogMenuMode]?.Unload();
@@ -1027,50 +1081,169 @@ function initMod() {
             return next(args);
         });
 
+        // Input validation and sanitization
+        const InputValidator = {
+            // Validation rules
+            rules: {
+                maxNameLength: 50,
+                maxFolderLength: 30,
+                reservedNames: ['main', 'default', 'temp', 'backup', 'export', 'import'],
+                forbiddenChars: /[<>:"/\\|?*\x00-\x1f]/g // Windows forbidden chars + control chars
+            },
+            
+            sanitizeName(name) {
+                if (!name || typeof name !== 'string') return '';
+                
+                // Remove forbidden characters and trim
+                return name.replace(this.rules.forbiddenChars, '').trim();
+            },
+            
+            validateName(name, type = 'outfit') {
+                const maxLength = type === 'folder' ? this.rules.maxFolderLength : this.rules.maxNameLength;
+                const sanitized = this.sanitizeName(name);
+                
+                if (!sanitized) {
+                    return { valid: false, error: `Please enter a valid ${type} name.` };
+                }
+                
+                if (sanitized.length > maxLength) {
+                    return { 
+                        valid: false, 
+                        error: `${type === 'folder' ? 'Folder' : 'Outfit'} name must be ${maxLength} characters or less.` 
+                    };
+                }
+                
+                if (this.rules.reservedNames.includes(sanitized.toLowerCase())) {
+                    return { 
+                        valid: false, 
+                        error: `"${sanitized}" is a reserved name. Please choose a different name.` 
+                    };
+                }
+                
+                return { valid: true, sanitized };
+            },
+            
+
+            
+            promptForName(message, type = 'outfit', existingNames = []) {
+                let attempts = 0;
+                const maxAttempts = 3;
+                
+                while (attempts < maxAttempts) {
+                    const input = prompt(message);
+                    if (input === null) return null; // User cancelled
+                    
+                    const validation = this.validateName(input, type);
+                    if (!validation.valid) {
+                        alert(validation.error);
+                        attempts++;
+                        continue;
+                    }
+                    
+                    // Check for duplicates
+                    if (existingNames.includes(validation.sanitized)) {
+                        if (type === 'folder') {
+                            alert(`Folder "${validation.sanitized}" already exists. Please choose a different name.`);
+                        } else {
+                            // For outfits, we allow overwriting, so we don't block here
+                            return validation.sanitized;
+                        }
+                        attempts++;
+                        continue;
+                    }
+                    
+                    return validation.sanitized;
+                }
+                
+                ErrorHandler.showError(`Failed to get valid ${type} name after ${maxAttempts} attempts.`);
+                return null;
+            }
+        };
+
+        // Enhanced error handling with user-friendly messages
+        const ErrorHandler = {
+            showError(message, details = null, isRecoverable = true) {
+                // Always log technical details for debugging
+                if (details) {
+                    console.error("BCOM Error:", details);
+                }
+                
+                // Show user-friendly message
+                if (isRecoverable) {
+                    ShowOutfitNotification(message, 5); // Longer duration for errors
+                } else {
+                    // For critical errors, still use alert but with helpful message
+                    alert(`Outfit Manager Error: ${message}\n\nCheck the browser console for technical details.`);
+                }
+            },
+            
+            validateBCXCode(code) {
+                if (!code || !code.trim()) {
+                    return { valid: false, error: "Please enter a BCX outfit code before importing." };
+                }
+                
+                try {
+                    const decompressed = LZString.decompressFromBase64(code.trim());
+                    if (!decompressed) {
+                        return { 
+                            valid: false, 
+                            error: "Invalid code format. Check you copied the complete code." 
+                        };
+                    }
+                    
+                    if (!decompressed.startsWith('[')) {
+                        return { 
+                            valid: false, 
+                            error: "Not a valid BCX outfit code. Use compatible BCX codes only." 
+                        };
+                    }
+                    
+                    const outfitData = JSON.parse(decompressed);
+                    if (!Array.isArray(outfitData)) {
+                        return { 
+                            valid: false, 
+                            error: "Code is corrupted or incomplete. Try copying it again." 
+                        };
+                    }
+                    
+                    if (!outfitData.every(item => item.Name && item.Group)) {
+                        return { 
+                            valid: false, 
+                            error: "Code contains invalid items. May be incompatible or corrupted." 
+                        };
+                    }
+                    
+                    return { valid: true, data: outfitData };
+                    
+                } catch (error) {
+                    return { 
+                        valid: false, 
+                        error: "Failed to process. Code may be corrupted or incompatible.",
+                        details: error
+                    };
+                }
+            }
+        };
+
         // Add this function to handle BCX imports
         function ImportBCXOutfit() {
             try {
                 const importElement = document.getElementById("OutfitManagerImport");
                 if (!importElement || !importElement.value) {
-                    alert("Please enter a BCX outfit code");
+                    ErrorHandler.showError("Please enter a BCX outfit code before importing.");
                     if (importElement) importElement.value = "";
                     return;
                 }
 
-                // Initial validation of the input string
-                const importString = importElement.value.trim();
-                if (!importString) {
-                    alert("Bad Import Data (E1)");
-                    console.error("Import error E1: Empty input");
+                // Validate the BCX code
+                const validation = ErrorHandler.validateBCXCode(importElement.value);
+                if (!validation.valid) {
+                    ErrorHandler.showError(validation.error, validation.details);
                     importElement.value = "";
                     return;
                 }
-
-                // Decompress and parse BCX data
-                const decompressedData = LZString.decompressFromBase64(importString);
-                if (!decompressedData) {
-                    alert("Bad Import Data (E2)");
-                    console.error("Import error E2: Failed to decompress");
-                    importElement.value = "";
-                    return;
-                }
-
-                // Initial validation of BCX format
-                if (!decompressedData.startsWith('[')) {
-                    alert("Bad Import Data (E3)");
-                    console.error("Import error E3: Not a BCX outfit code");
-                    importElement.value = "";
-                    return;
-                }
-
-                // Parse and validate the data structure
-                const outfitData = JSON.parse(decompressedData);
-                if (!Array.isArray(outfitData) || !outfitData.every(item => item.Name && item.Group)) {
-                    alert("Bad Import Data (E4)");
-                    console.error("Import error E4: Invalid BCX format");
-                    importElement.value = "";
-                    return;
-                }
+                
+                const outfitData = validation.data;
 
                 // Detect if it's a hair-only outfit
                 const isHairOnlyOutfit = outfitData.length > 0 && outfitData.every(item => 
@@ -1131,9 +1304,11 @@ function initMod() {
                 importElement.value = "";
 
             } catch (error) {
-                console.error("Import error:", error);
-                alert("Bad Import Data");
-                importElement.value = "";
+                ErrorHandler.showError(
+                    "Failed to import. Check the code is complete and try again.",
+                    error
+                );
+                if (importElement) importElement.value = "";
             }
         }
 
@@ -1159,6 +1334,24 @@ function initMod() {
             "  will only apply hairstyles if an outfit",
             "  contains other clothing or restraints."
         ];
+
+        // Add this function to calculate remaining outfit slots
+        function getRemainingOutfitSlots() {
+            try {
+                const memberNumber = Player.MemberNumber;
+                const storageKey = `${STORAGE_PREFIX}${memberNumber}`;
+                const storageData = localStorage.getItem(storageKey);
+                
+                if (!storageData) return MAX_OUTFITS;
+                
+                const outfitStorage = JSON.parse(storageData);
+                const currentOutfits = outfitStorage.outfits?.length || 0;
+                return Math.max(0, MAX_OUTFITS - currentOutfits);
+            } catch (error) {
+                console.error('Failed to calculate remaining slots:', error);
+                return MAX_OUTFITS;
+            }
+        }
 
         const SORT_MODE_HELP_TEXT = [
             "Sort Mode Help:",
@@ -1204,6 +1397,13 @@ function initMod() {
             "",
             "Click 'Exit Folder Management' when finished"
         ];
+
+        // Function to determine color based on remaining slots
+        function getRemainingSlotsColor(remaining) {
+            if (remaining > 20) return "LimeGreen"; // plenty left
+            if (remaining > 5) return "Yellow";       // getting low
+            return "Red";                           // almost full
+        }
 
         // Modify DrawOutfitMenu to include import functionality
         function DrawOutfitMenu() {
@@ -1345,19 +1545,6 @@ function initMod() {
                 DrawText(`Managing Folder: ${displayFolderName}`, 1450, 270, "White", "center");
             }
 
-            // Draw folder management interface when in folder management mode
-            // -- Code has been moved to the end of the function to ensure proper z-index --
-
-            // Create a display-only copy of the character
-            // Old approach (deep copy):
-            // displayChar.Appearance = CurrentCharacter.Appearance.map(item => ({
-            //     ...item,
-            //     Property: item.Property ? { ...item.Property } : undefined,
-            //     Craft: item.Craft ? { ...item.Craft } : undefined,
-            //     Color: Array.isArray(item.Color) ? [...item.Color] : item.Color
-            // }));  // Deep copy
-
-            // New approach: use bundle/load for a validated, server-style copy
             // 1. Create the bundle from the current character
             const appearanceBundle = ServerAppearanceBundle(CurrentCharacter.Appearance);
 
@@ -1435,14 +1622,14 @@ function initMod() {
 
                     try {
                         // Only check for locked items in default mode and when hair only mode is not enabled
-                        if (!isSortMode && !isExportMode && !isFolderManagementMode && !hairOnly) {
+                        if (!isSortMode && !isExportMode && !isFolderManagementMode && !hairOnly && outfit?.data) {
                             const decompressed = LZString.decompressFromBase64(outfit.data);
                             if (!decompressed) {
                                 throw new Error("Failed to decompress outfit data");
                             }
 
                             const outfitData = JSON.parse(decompressed);
-                            if (!outfitData) {
+                            if (!outfitData || !Array.isArray(outfitData)) {
                                 throw new Error("No valid outfit data found");
                             }
 
@@ -1467,13 +1654,12 @@ function initMod() {
                         // Use LoadOutfit to apply the outfit to our display character
                         LoadOutfit(displayChar, outfit.name);
                         CharacterLoadCanvas(displayChar);
+                        
 
                     } catch (error) {
                         console.error("Failed to load outfit data:", error);
                     }
-                }
-
-                    
+                }                    
 
                 // Add hair icon prefix for hair-only outfits
                 const prefix = outfit.isHairOnly ? "✂️ " : "";
@@ -1502,7 +1688,6 @@ function initMod() {
                     // Calculate outfit number (exclude folders from numbering)
                     const outfitNumber = i + 1 - folderEntries.length;
                     DrawButton(1210, yPos, 490, 60, `${outfitNumber}. ${prefix}${outfit.name}`, "White");
-                    DrawButton(1710, yPos + 5, 50, 50, "🗑️", "White", "", "Delete outfit");
                 } else if (isExportMode) {
                     // Calculate outfit number (exclude folders from numbering)
                     const outfitNumber = i + 1 - folderEntries.length;
@@ -1522,6 +1707,25 @@ function initMod() {
 
             // If not hovering any outfit, restore help text and original appearance
             if (!isHoveringAnyOutfit) {
+                try {
+                    if (typeof ServerAppearanceBundle === 'function' && typeof ServerAppearanceLoadFromBundle === 'function') {
+                        const appearanceBundle = ServerAppearanceBundle(CurrentCharacter.Appearance);
+                        ServerAppearanceLoadFromBundle(
+                            displayChar,
+                            CurrentCharacter.AssetFamily,
+                            appearanceBundle,
+                            CurrentCharacter.MemberNumber
+                        );
+                        displayChar.Pose = CurrentCharacter.Pose ? [...CurrentCharacter.Pose] : [];  // Copy current poses
+                        if (typeof CharacterLoadCanvas === 'function') {
+                            CharacterLoadCanvas(displayChar);
+                        }
+                    }
+                } catch (error) {
+                    console.error("BCOM: Error restoring character appearance:", error);
+                }
+            }
+            /*if (!isHoveringAnyOutfit) {
                 displayChar.Appearance = CurrentCharacter.Appearance.map(item => ({
                     ...item,
                     Property: item.Property ? { ...item.Property } : undefined,
@@ -1530,7 +1734,7 @@ function initMod() {
                 }));  // Deep copy
                 displayChar.Pose = CurrentCharacter.Pose ? [...CurrentCharacter.Pose] : [];  // Copy current poses
                 CharacterLoadCanvas(displayChar);
-            }
+            }*/
 
             // Draw the character
             DrawCharacter(displayChar, 500, yOffset, 1);
@@ -1547,8 +1751,29 @@ function initMod() {
             const originalFont = MainCanvas.font;
             MainCanvas.textAlign = "left";
             MainCanvas.font = "24px " + originalFont.split("px ")[1];
+
+            let y = 150;
             helpText.forEach((text, i) => {
-                DrawText(text, 25, 150 + (i * 25), "White", "Black");
+                DrawText(text, 25, y, "White", "Black");
+                y += 25;
+                if (text.includes("Up to")) {
+                    // Insert the dynamic line right after the max outfits line
+                    const remaining = getRemainingOutfitSlots();
+                    const color = getRemainingSlotsColor(remaining);
+                    const prefix = "• You have ";
+                    const numberText = `${remaining}`;
+                    const suffix = " outfit slots remaining";
+                    let x = 25;
+                    // Draw prefix
+                    DrawText(prefix, x, y, "White", "Black");
+                    x += MainCanvas.measureText(prefix).width;
+                    // Draw number in color
+                    DrawText(numberText, x, y, color, "Black");
+                    x += MainCanvas.measureText(numberText).width;
+                    // Draw suffix
+                    DrawText(suffix, x, y, "White", "Black");
+                    y += 25;
+                }
             });
             MainCanvas.textAlign = "center";
             MainCanvas.font = originalFont;
@@ -1712,8 +1937,28 @@ function initMod() {
         }
 
         function SaveOutfit(C, name = null) {
-            const outfitName = name || prompt("Enter outfit name:");
-            if (!outfitName?.trim()) return;
+            let outfitName;
+            
+            if (name) {
+                // Validate provided name
+                const validation = InputValidator.validateName(name, 'outfit');
+                if (!validation.valid) {
+                    ErrorHandler.showError(validation.error);
+                    return;
+                }
+                outfitName = validation.sanitized;
+            } else {
+                // Get existing outfit names for validation
+                const memberNumber = Player.MemberNumber;
+                const storageKey = `${STORAGE_PREFIX}${memberNumber}`;
+                const storageData = localStorage.getItem(storageKey);
+                const existingNames = storageData ? 
+                    JSON.parse(storageData).outfits?.map(o => o.name) || [] : [];
+                
+                // Prompt with validation
+                outfitName = InputValidator.promptForName("Enter outfit name:", 'outfit', existingNames);
+                if (!outfitName) return; // User cancelled or validation failed
+            }
 
             try {
                 const memberNumber = Player.MemberNumber;
@@ -1733,9 +1978,9 @@ function initMod() {
                 // Check outfit limit (MAX_OUTFITS maximum)
                 if (outfitStorage.outfits.length >= MAX_OUTFITS && !outfitStorage.outfits.some(o => o.name === outfitName)) {
                     ShowOutfitNotification(`Maximum outfit limit (${MAX_OUTFITS}) reached. Please delete some outfits first.`);
-                    return;
-                }
-
+                        return;
+                    }
+                    
                 // First check for outfit with same name in ANY folder
                 const sameNameOutfits = outfitStorage.outfits.filter(o => o.name === outfitName);
                 let overwriteIndex = -1;
@@ -1748,9 +1993,9 @@ function initMod() {
                     if (existingInCurrentFolder) {
                         // Outfit exists in current folder - ask to overwrite
                         if (!confirm(`Outfit "${outfitName}" already exists in folder "${currentFolder}". Do you want to overwrite it?`)) {
-                            return;
-                        }
-                        
+                        return;
+                    }
+        
                         // Find the existing outfit index (we'll use it later)
                         const existingIndex = outfitStorage.outfits.findIndex(o => 
                             o.name === outfitName && 
@@ -1789,7 +2034,7 @@ function initMod() {
                     }));
 
                 if (outfitData.length === 0) {
-                    alert("No valid items to save");
+                    ErrorHandler.showError("No clothing or restraints found to save as an outfit.");
                     return;
                 }
 
@@ -1817,19 +2062,27 @@ function initMod() {
                 localStorage.setItem(storageKey, JSON.stringify(outfitStorage));
                 
             } catch (error) {
-                console.error('Save failed:', error);
-                alert("Failed to save outfit. See console for details.");
+                ErrorHandler.showError(
+                    "Failed to save outfit. This might be due to storage limitations or corrupted data.",
+                    error,
+                    false // Non-recoverable error
+                );
             }
         }
 
         function LoadOutfit(C, outfitName) {
             try {
-                if (!outfitName) {
-                    console.error("LoadOutfit called with invalid outfit name:", outfitName);
+                if (!outfitName || !C) {
+                    console.error("LoadOutfit called with invalid parameters:", {outfitName, C});
                     return false;
                 }
 
-                const memberNumber = Player.MemberNumber;
+                const memberNumber = Player?.MemberNumber;
+                if (!memberNumber) {
+                    console.error("LoadOutfit: Player member number not available");
+                    return false;
+                }
+                
                 const storageKey = `${STORAGE_PREFIX}${memberNumber}`;
                 
                 // Get storage
@@ -1838,10 +2091,10 @@ function initMod() {
 
                 const outfitStorage = JSON.parse(storageData);
                 
-                const outfit = outfitStorage.outfits.find(o => o.name === outfitName);
+                const outfit = outfitStorage?.outfits?.find(o => o.name === outfitName);
                 
-                if (!outfit) {
-                    console.error("No outfit found with name:", outfitName);
+                if (!outfit || !outfit.data) {
+                    console.error("No outfit found with name or no data:", outfitName);
                     return false;
                 }
 
@@ -1853,7 +2106,7 @@ function initMod() {
                 }
 
                 const outfitData = JSON.parse(decompressed);
-                if (!outfitData) {
+                if (!outfitData || !Array.isArray(outfitData)) {
                     console.error("No valid outfit data found");
                     return false;
                 }
@@ -1890,8 +2143,13 @@ function initMod() {
                             // Skip if the group is locked
                             if (InventoryItemHasEffect(InventoryGet(C, item.Group), "Lock")) continue;
                             
-                            const newItem = CharacterAppearanceSetItem(C, item.Group, asset, item.Color);
-                            if (item.Property) newItem.Property = {...item.Property};
+                            const bondageSkill = Player.Skill.find(skill => skill.Type === "Bondage");
+                            const newItem = {
+                                Asset: asset,
+                                Color: item.Color || "Default",
+                                Property: item.Property ? {...item.Property} : undefined,
+                                Difficulty: asset.Difficulty !== undefined ? asset.Difficulty + (bondageSkill ? bondageSkill.Level : 0) : 0
+                            };
                             if (item.Craft) newItem.Craft = item.Craft;
                             C.Appearance.push(newItem);
                         }
@@ -1911,7 +2169,7 @@ function initMod() {
                     // Keep cosplay items and items that can't be removed
                     if (!item.Asset.Group.AllowNone || 
                         item.Asset.Group.Category !== "Appearance" || 
-                        item.Asset.Group.BodyCosplay) {
+                        item.Asset.BodyCosplay) {
                         continue;
                     }
                     C.Appearance.splice(A, 1);
@@ -1930,7 +2188,7 @@ function initMod() {
                     // Keep locked items
                     InventoryItemHasEffect(InventoryGet(C, item.Asset.Group.Name), "Lock") ||
                     // Keep blocked body cosplay
-                    (item.Asset.Group.BodyCosplay && CurrentCharacter.OnlineSharedSettings?.BlockBodyCosplay) ||
+                    (item.Asset.BodyCosplay && CurrentCharacter.OnlineSharedSettings?.BlockBodyCosplay) ||
                     // Keep hair if applyHairWithOutfit is false or if isHairOnlyOutfit and no hair items in outfit
                     (!applyHairWithOutfit && (item.Asset.Group.Name === "HairFront" || item.Asset.Group.Name === "HairBack")) ||
                     // Keep items that aren't clothing, items, body markings, or hair
@@ -1948,7 +2206,7 @@ function initMod() {
 
                     // Skip if the group is locked or if body cosplay is blocked
                     if (InventoryItemHasEffect(InventoryGet(C, item.Group), "Lock")) continue;
-                    if (asset.Group.BodyCosplay && CurrentCharacter.OnlineSharedSettings?.BlockBodyCosplay) continue;
+                    if (asset.BodyCosplay && CurrentCharacter.OnlineSharedSettings?.BlockBodyCosplay) continue;
                     
                     // Skip hair items if applyHairWithOutfit is false
                     if (!applyHairWithOutfit && (item.Group === "HairFront" || item.Group === "HairBack")) continue;
@@ -1956,8 +2214,13 @@ function initMod() {
                     // Skip non-hair items if in hair-only mode
                     if (isHairOnlyOutfit && !(item.Group === "HairFront" || item.Group === "HairBack")) continue;
 
-                    const newItem = CharacterAppearanceSetItem(C, item.Group, asset, item.Color);
-                    if (item.Property) newItem.Property = {...item.Property};
+                    const bondageSkill = Player.Skill.find(skill => skill.Type === "Bondage");
+                    const newItem = {
+                        Asset: asset,
+                        Color: item.Color || "Default",
+                        Property: item.Property ? {...item.Property} : undefined,
+                        Difficulty: asset.Difficulty !== undefined ? asset.Difficulty + (bondageSkill ? bondageSkill.Level : 0) : 0
+                    };
                     if (item.Craft) newItem.Craft = item.Craft;
                     C.Appearance.push(newItem);
                 }
@@ -2091,41 +2354,48 @@ function initMod() {
             return next(args);
         });
 
-        // Add these functions to your code
+        // Export outfits to a file
         function backupOutfits() {
             try {
                 const memberNumber = Player.MemberNumber;
                 const storageKey = `${STORAGE_PREFIX}${memberNumber}`;
                 const storageData = localStorage.getItem(storageKey);
-                
+        
                 if (!storageData) {
                     ShowOutfitNotification("No outfits to backup");
                     return;
                 }
-                
-                // Prepare the JSON data
+        
+                // Parse the full storage data
                 const outfitData = JSON.parse(storageData);
-                
-                // Simplified backup data
-                const backupData = {
-                    memberNumber: memberNumber,  // Still useful to identify whose outfits these are
-                    data: outfitData             // The actual outfit data including folders
+        
+                // Include settings in export
+                const exportData = {
+                    outfits: outfitData.outfits || [],
+                    folders: outfitData.folders || [],
+                    settings: outfitData.settings || {}
                 };
-                
+        
+                // Prepare the backup object
+                const backupData = {
+                    memberNumber: memberNumber,
+                    data: exportData
+                };
+        
                 // Convert to JSON string
                 const jsonString = JSON.stringify(backupData);
-                
+        
                 // Create download link
                 const element = document.createElement('a');
                 element.setAttribute('href', 'data:text/plain;charset=utf-8,' + encodeURIComponent(jsonString));
                 element.setAttribute('download', `BCOM_Outfits_Backup_${memberNumber}_${new Date().toISOString().split('T')[0]}.json`);
                 element.style.display = 'none';
-                
+        
                 // Add to body, click and remove
                 document.body.appendChild(element);
                 element.click();
                 document.body.removeChild(element);
-                
+        
                 ShowOutfitNotification("Outfits backup created successfully");
             } catch (error) {
                 console.error("Backup failed:", error);
@@ -2144,8 +2414,8 @@ function initMod() {
                 // Add to body
                 document.body.appendChild(inputElement);
                 
-                // Handle file selection
-                inputElement.addEventListener('change', function() {
+                // Handle file selection with proper cleanup
+                const removeChangeListener = eventListenerManager.add(inputElement, 'change', function() {
                     if (this.files && this.files[0]) {
                         const file = this.files[0];
                         const reader = new FileReader();
@@ -2251,6 +2521,7 @@ function initMod() {
                                                             outfits: [...filteredOutfits, ...backupData.data.outfits],
                                                             folders: combinedFolders
                                                         };
+                                                        finalOutfits.settings = backupData.data.settings || (existingOutfits && existingOutfits.settings) || {};
                                                         actualImportCount = backupData.data.outfits.length;
                                                     } else {
                                                         // Keep existing outfits, only add non-conflicting ones
@@ -2258,13 +2529,15 @@ function initMod() {
                                                             outfits: [...existingOutfits.outfits, ...newOutfits],
                                                             folders: combinedFolders
                                                         };
+                                                        finalOutfits.settings = backupData.data.settings || (existingOutfits && existingOutfits.settings) || {};
                                                         actualImportCount = newOutfits.length;
                                                     }
                                                 } else {
                                                     // No conflicts, just add all
                                                     finalOutfits = {
                                                         outfits: [...existingOutfits.outfits, ...newOutfits],
-                                                        folders: combinedFolders
+                                                        folders: combinedFolders,
+                                                        settings: backupData.data.settings || (existingOutfits && existingOutfits.settings) || {}
                                                     };
                                                     actualImportCount = newOutfits.length;
                                                 }
@@ -2310,7 +2583,7 @@ function initMod() {
                                 }
                                 
                                 // Use the actual import count in the notification
-                                ShowOutfitNotification(`Successfully imported ${actualImportCount} outfits in ${finalOutfits.folders.length} folders`);
+                                ShowOutfitNotification(`Imported ${actualImportCount} outfits in ${finalOutfits.folders.length} folders`);
                             } catch (error) {
                                 console.error("Import failed:", error);
                                 ShowOutfitNotification("Failed to import: Invalid backup file");
@@ -2320,7 +2593,9 @@ function initMod() {
                         reader.readAsText(file);
                     }
                     
-                    // Remove the input element
+                    // Clean up listeners and remove the input element
+                    removeChangeListener();
+                    eventListenerManager.removeAllForElement(inputElement);
                     document.body.removeChild(inputElement);
                 });
                 
@@ -2337,7 +2612,7 @@ function initMod() {
             return folderName.substring(0, maxLength - 3) + "...";
         }
 
-        function targetfinder(input) {
+        function targetfinder(input, isTabCompletion = false) {
             if (!input || !ChatRoomCharacter || ChatRoomCharacter.length === 0) return null;
             
             // Check if input is a pure number (member number)
@@ -2400,8 +2675,13 @@ function initMod() {
             
             // If multiple partial matches found, notify user to be more specific
             if (partialMatches.length > 1) {
-                ChatRoomSendLocal(`Multiple characters with names containing "${input}" found. Please be more specific or use their member number.`, 10000);
-                return null;
+                if (isTabCompletion) {
+                    // For tab completion, return the matches array
+                    return partialMatches;
+                } else {
+                    ChatRoomSendLocal(`Multiple characters with names containing "${input}" found. Please be more specific or use their member number.`, 10000);
+                    return null;
+                }
             } else if (partialMatches.length === 1) {
                 return partialMatches[0];
             }
@@ -2419,6 +2699,10 @@ function initMod() {
             // Make sure PreviousDialogMode isn't blank
             if (!PreviousDialogMode || PreviousDialogMode === "") {
                 PreviousDialogMode = "dialog";
+            }
+
+            if (CurrentScreen === "ChatRoom") {
+                restoreChatLog();
             }
 
             const importElement = document.getElementById("OutfitManagerImport");
@@ -2443,44 +2727,10 @@ function initMod() {
                 hairOnly = false;
                 selectedOutfits = [];
                 
-                // Remove our style element that hides dialog elements
-                const styleElement = document.getElementById("outfit-manager-style");
-                if (styleElement) {
-                    styleElement.remove();
-                    console.log("DialogMenuBack: Removed style element that was hiding dialog elements");
-                }
+                toggleDialogElements(false);
                 
-                // Make sure all other outfit manager DOM elements are also removed
-                const outfitManager = document.getElementById("dialog-outfit-manager");
-                if (outfitManager) {
-                    outfitManager.remove();
-                    console.log("DialogMenuBack: Removed outfit manager dialog container");
-                }
-                
-                // Restore visibility to all specifically hidden elements
-                const hiddenElementIds = [
-                    "dialog-expression", "dialog-expression-status", "dialog-expression-menubar", 
-                    "dialog-expression-menu-left", "dialog-expression-button-grid",
-                    "dialog-inventory", "dialog-inventory-status", "dialog-inventory-grid", 
-                    "dialog-inventory-icon", "dialog-inventory-paginate",
-                    "dialog-pose", "dialog-pose-status", "dialog-pose-menubar", "dialog-pose-button-grid",
-                    "dialog-expression-preset", "dialog-expression-preset-status", 
-                    "dialog-expression-preset-menubar", "dialog-expression-preset-button-grid",
-                    "dialog-owner-rules", "dialog-owner-rules-status", "dialog-owner-rules-menubar", "dialog-owner-rules-grid"
-                ];
-                
-                hiddenElementIds.forEach(id => {
-                    const element = document.getElementById(id);
-                    if (element) {
-                        element.style.display = "";
-                        element.style.visibility = "";
-                        element.style.opacity = "";
-                        element.style.pointerEvents = "";
-                    }
-                });
-                
-                // Add failsafe for PreviousDialogMode
-                if (!PreviousDialogMode) {
+                // Make sure PreviousDialogMode isn't blank
+                if (!PreviousDialogMode || PreviousDialogMode === "") {
                     PreviousDialogMode = "dialog";
                 }
                 
@@ -2546,12 +2796,6 @@ function initMod() {
                             ChatRoomSendLocal("Player not found. Please check the name or member number and try again.");
                             return; // Exit the command without opening the outfit manager
                         }
-                        
-                        // Check permissions - only allow if it's the player or they have AllowItem permission
-                        if (targetCharacter.MemberNumber !== Player.MemberNumber && !targetCharacter.AllowItem) {
-                            ChatRoomSendLocal("You don't have permission to interact with this player.");
-                            return; // Exit without opening outfit manager
-                        }
                     }
                     
                     // Open dialog with target character
@@ -2559,23 +2803,211 @@ function initMod() {
                     
                     // After dialog is open, switch to outfit mode
                     setTimeout(() => {
-                        PreviousDialogMode = DialogMenuMode;
+                        PreviousDialogMode = "dialog";
+                        
+                        // Reset outfit manager state
+                        isSortMode = false;
+                        isExportMode = false;
+                        isFolderManagementMode = false;
+                        hairOnly = false;
+                        applyHairWithOutfit = false;
+                        selectedOutfits = [];
+                        
+                        // Hide custom UI elements
+                        toggleDialogElements(false);
+                        
                         DialogChangeMode("outfits");
+                        
+                        // Remove the button since we're now in outfit mode
+                        const button = document.getElementById("OutfitManagerButton");
+                        if (button) {
+                            button.remove();
+                        }
                     }, 10);
                 }
             }
         ]);
 
+        // Add after line 71 (inside initMod function)
+        
+        // Event Listener Management System
+        const eventListenerManager = {
+            listeners: new Map(),
+            
+            add(element, event, handler, options) {
+                if (!this.listeners.has(element)) {
+                    this.listeners.set(element, new Map());
+                }
+                const elementListeners = this.listeners.get(element);
+                const key = `${event}_${options ? JSON.stringify(options) : 'default'}`;
+                
+                // Remove existing listener if it exists
+                if (elementListeners.has(key)) {
+                    const oldHandler = elementListeners.get(key);
+                    element.removeEventListener(event, oldHandler, options);
+                }
+                
+                element.addEventListener(event, handler, options);
+                elementListeners.set(key, handler);
+                
+                return () => this.remove(element, event, options);
+            },
+            
+            remove(element, event, options) {
+                if (!this.listeners.has(element)) return;
+                
+                const elementListeners = this.listeners.get(element);
+                const key = `${event}_${options ? JSON.stringify(options) : 'default'}`;
+                
+                if (elementListeners.has(key)) {
+                    const handler = elementListeners.get(key);
+                    element.removeEventListener(event, handler, options);
+                    elementListeners.delete(key);
+                    
+                    if (elementListeners.size === 0) {
+                        this.listeners.delete(element);
+                    }
+                }
+            },
+            
+            removeAllForElement(element) {
+                if (!this.listeners.has(element)) return;
+                
+                const elementListeners = this.listeners.get(element);
+                for (const [key, handler] of elementListeners) {
+                    const [event, optionsStr] = key.split('_');
+                    const options = optionsStr === 'default' ? undefined : JSON.parse(optionsStr);
+                    element.removeEventListener(event, handler, options);
+                }
+                this.listeners.delete(element);
+            },
+            
+            cleanup() {
+                for (const [element, elementListeners] of this.listeners) {
+                    for (const [key, handler] of elementListeners) {
+                        const [event, optionsStr] = key.split('_');
+                        const options = optionsStr === 'default' ? undefined : JSON.parse(optionsStr);
+                        element.removeEventListener(event, handler, options);
+                    }
+                }
+                this.listeners.clear();
+            }
+        };
+
+        // Animation frame manager to prevent leaks
+        const animationManager = {
+            activeAnimations: new Set(),
+            
+            start(animationFunction, id) {
+                if (this.activeAnimations.has(id)) {
+                    this.stop(id);
+                }
+                
+                let animationId;
+                const wrappedFunction = () => {
+                    if (!this.activeAnimations.has(id)) return; // Stop if removed
+                    animationFunction();
+                    animationId = requestAnimationFrame(wrappedFunction);
+                };
+                
+                this.activeAnimations.add(id);
+                animationId = requestAnimationFrame(wrappedFunction);
+                
+                return () => this.stop(id);
+            },
+            
+            stop(id) {
+                this.activeAnimations.delete(id);
+            },
+            
+            stopAll() {
+                this.activeAnimations.clear();
+            }
+        };
+
     } catch (error) {
-        console.error('OutfitManager failed:', error);
+        console.error('BCOM: failed:', error);
     }
 
     
 }
 
+function waitForPlayerAndInit() {
+    if (window.Player && typeof Player.MemberNumber !== "undefined") {
+        initMod();
+    } else {
+        setTimeout(waitForPlayerAndInit, 100);
+    }
+}
+
+// Instead of calling initMod() directly:
 if (window.bcModSdk?.registerMod) {
-    initMod();
+    waitForPlayerAndInit();
 } else {
-    window.addEventListener('bcModSdkLoaded', initMod);
-    setTimeout(initMod, 5000);
+    window.addEventListener('bcModSdkLoaded', waitForPlayerAndInit);
+    setTimeout(waitForPlayerAndInit, 5000);
+}
+
+function restoreChatLog() {
+    // First ensure the chat log is visible
+    const chatLog = document.getElementById("TextAreaChatLog");
+    if (chatLog) {
+        chatLog.style.display = "";
+    }
+    // Use the game's own UI restoration functions
+    if (typeof ChatRoomShowElements === 'function') {
+        ChatRoomShowElements();
+    }
+    if (typeof ChatRoomResize === 'function') {
+        ChatRoomResize();
+    }
+    // Focus the chat input box
+    const chatInput = document.getElementById("InputChat");
+    if (chatInput) chatInput.focus();
+}
+
+function toggleDialogElements(hide = true) {
+    const hiddenElementIds = [
+        "dialog-expression", "dialog-expression-status", "dialog-expression-menubar", 
+        "dialog-expression-menu-left", "dialog-expression-button-grid",
+        "dialog-inventory", "dialog-inventory-status", "dialog-inventory-grid", 
+        "dialog-inventory-icon", "dialog-inventory-paginate",
+        "dialog-pose", "dialog-pose-status", "dialog-pose-menubar", "dialog-pose-button-grid",
+        "dialog-expression-preset", "dialog-expression-preset-status", 
+        "dialog-expression-preset-menubar", "dialog-expression-preset-button-grid",
+        "dialog-owner-rules", "dialog-owner-rules-status", "dialog-owner-rules-menubar", "dialog-owner-rules-grid"
+    ];
+    
+    hiddenElementIds.forEach(id => {
+        const element = document.getElementById(id);
+        if (element) {
+            if (hide) {
+                element.style.display = "none";
+                element.style.visibility = "hidden";
+                element.style.opacity = "0";
+                element.style.pointerEvents = "none";
+            } else {
+                element.style.display = "";
+                element.style.visibility = "";
+                element.style.opacity = "";
+                element.style.pointerEvents = "";
+            }
+        }
+    });
+
+    // Clean up BCX text field and related elements when hiding
+    if (!hide) {
+        const importElement = document.getElementById("OutfitManagerImport");
+        if (importElement) {
+            importElement.remove();
+        }
+        
+        // Clean up any additional containers
+        ["OutfitManagerImportContainer", "OutfitExportField", "ImportExportContainer"].forEach(id => {
+            const element = document.getElementById(id);
+            if (element) {
+                element.remove();
+            }
+        });
+    }
 }
