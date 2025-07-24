@@ -2,6 +2,20 @@
 
 Any changes made to the addon will be here for easier documentation.
 
+## [v0.7.8]
+- Added tab auto-completion for the /bcom command.  Type "/bcom" and press tab to cycle through all players in the chatroom (in the order they're listed). Type in a partial name to only cycle through players of the partial name that was entered
+- Added `ChatRoomRefreshChatSettings` when exiting the Outfit Manager when using the /bcom command so blind/deafened effects will apply to chat properly
+- Changed player permission logic: You can now open the Outfit Manager on any player regardless of permissions, but you will not be able to apply outfits if you do not have permissions. Attempting to apply an outfit will show a "You don't have permission to apply outfits to this character" notification
+-- If you do not have permission to apply outfits to the `CurrentCharacter`, all outfits listed will be pink for visual feedback
+- Changed Notification duration from a default of `3` seconds to `5` seconds with the new Toasts notification system
+- Added a "Padlocks" dropdown menu to give the user the option to remove or replace all locks on an outfit that is being applied
+-- When selecting a padlock from the dropdown that has configurable options, a modal-based dialog box will appear that will let you configure the padlock's properties (password, timer, combo, etc).  If the dialog box is cancelled, the default properties will be used
+-- Available padlocks in the list will reflect the `CurrentCharacter`'s permissions and whether or not you can use them based on relationship status (Owner/Lover)
+-- Selected padlocks from the dropdown will be reflected when exporting a saved outfit as a BCX code
+-- For timed padlocks, added an option to randomize the "Remove item when timer expires" option for each applied padlock
+- Added checks for cosplay items in saved outfits: Cosplay items will neither replace or be added when applying an outfit to the `CurrentCharacter`
+- Changed the "Import outfits from backup file" icon to use the down arrow icon (to also match the crafting screen for consistency)
+
 ## [v0.7.7]
 - When BCOM detects a version change (which will happen starting with this version), a private message will be sent to the player notifying them and to look at the changelog if they desire.
 - Changed how cosplay items are detected.  Used `asset.BodyCosplay` instead of `asset.Group.BodyCosplay` because it seems the surface level value is more accurate? (See `HairAccessory1` + `BunnyEars2`). Depending on any potential feedback, this may change back to the old behavior or I might include checking for both cases.
