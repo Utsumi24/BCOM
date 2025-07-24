@@ -6,7 +6,7 @@ Any changes made to the addon will be here for easier documentation.
 - Added tab auto-completion for the /bcom command.  Type "/bcom" and press tab to cycle through all players in the chatroom (in the order they're listed). Type in a partial name to only cycle through players of the partial name that was entered
 - Added `ChatRoomRefreshChatSettings` when exiting the Outfit Manager when using the /bcom command so blind/deafened effects will apply to chat properly
 - Changed player permission logic: You can now open the Outfit Manager on any player regardless of permissions, but you will not be able to apply outfits if you do not have permissions. Attempting to apply an outfit will show a "You don't have permission to apply outfits to this character" notification
-	-If you do not have permission to apply outfits to the `CurrentCharacter`, all outfits listed will be pink for visual feedback
+	- If you do not have permission to apply outfits to the `CurrentCharacter`, all outfits listed will be pink for visual feedback
 - Changed Notification duration from a default of `3` seconds to `5` seconds with the new Toasts notification system
 - Added a "Padlocks" dropdown menu to give the user the option to remove or replace all locks on an outfit that is being applied
 	- When selecting a padlock from the dropdown that has configurable options, a modal-based dialog box will appear that will let you configure the padlock's properties (password, timer, combo, etc).  If the dialog box is cancelled, the default properties will be used
