@@ -8,6 +8,8 @@
 // @match        https://www.bondageprojects.elementfx.com/*
 // @match        https://bondage-europe.com/*
 // @match        https://www.bondage-europe.com/*
+// @match        https://bondage-asia.com/*
+// @match        https://www.bondage-asia.com/*
 // @match        http://localhost:*/*
 // @run-at       document-end
 // @grant        none
@@ -20,3 +22,4 @@
     script.src = `https://utsumi24.github.io/BCOM/bcom.js?${Date.now()}`; // Cache-busting with Date.now()
     document.head.appendChild(script);
 })();
+
