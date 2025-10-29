@@ -1,0 +1,27 @@
+name: Deploy Dev Branch
+
+permissions:
+  contents: write
+  pages: write
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ["dev"]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Deploy to GitHub Pages (/dev/ folder)
+        uses: JamesIves/github-pages-deploy-action@v4
+        with:
+          branch: gh-pages
+          folder: .
+          target-folder: dev
+          clean: false  # Don't delete root files
+          git-config-name: github-actions[bot]
+          git-config-email: github-actions[bot]@users.noreply.github.com
