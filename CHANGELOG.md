@@ -2,6 +2,12 @@
 
 Any changes made to the addon will be here for easier documentation.
 
+## [v0.8]
+- Converted the addon to a modular version.
+- Introducing the the "Outfit Studio". A new addition that lets the player create custom outfits without having to tie up another player/NPC or themselves. It allows the player to apply restraints/locks/clothing to a "dummy" character and save the entire thing to the Outfit Manager or export as a BCX code.  The Outfit Studio also allows you to edit saved Outfit Manager outfits as well as import an outfit from a BCX code.
+- Added checkboxes to the left of each Outfit Manager outfit so it can be edited in the Outfit Studio.
+- Increased max outfits to `100`.
+
 ## [v0.7.8]
 - Added tab auto-completion for the /bcom command.  Type "/bcom" and press tab to cycle through all players in the chatroom (in the order they're listed). Type in a partial name to only cycle through players of the partial name that was entered
 - Added `ChatRoomRefreshChatSettings` when exiting the Outfit Manager when using the /bcom command so blind/deafened effects will apply to chat properly
@@ -52,7 +58,7 @@ Any changes made to the addon will be here for easier documentation.
 - Properly hide and restore the Pose, Expressions, and Owner Rules Menus when the Outfit Manager is opened or closed.
 - Fixed dialog restoration when exiting the Outfit Manager due to DOM element integration.
 
-## [v0.7.5]
+## [v0.7.5] 
 - Added a checkbox to apply hairstyles when wearing an outfit.
 - Saving outfits now saves the hairstyle as well.
 - Added help text regarding the apply hair checkbox.
@@ -80,7 +86,7 @@ Any changes made to the addon will be here for easier documentation.
 - Fixed notification when importing outfits to show the actual number of outfits imported instead of the total number of outfits.
 - Added chat command "bcom" to open the outfit manager for a specific character, if a name is provided, or for yourself if no name is provided.
 
-## [v0.7.1]
+## [v0.7.1] 
 - Ensured that all modes are reset when exiting Outfit Manager.
 
 ## [v0.7.0]
@@ -168,3 +174,4 @@ Any changes made to the addon will be here for easier documentation.
 - Basic outfit saving and loading functionality.
 - Added outfit manager button to character dialog.
 - Basic outfit menu interface. 
+
