@@ -18,6 +18,7 @@
     'use strict';
     const timestamp = Date.now(); // Cache-busting timestamp
     const script = document.createElement('script');
-    script.src = `https://raw.githubusercontent.com/Utsumi24/BCOM/dev/src/main.js?t=${timestamp}`;
+    script.src = `https://utsumi24.github.io/BCOM/dev/src/main.js?t=${timestamp}`;
     document.head.appendChild(script);
+
 })();
