@@ -18,7 +18,7 @@ function loadScript(src) {
 async function loadModules() {
     try {
         
-        const baseUrl = 'https://raw.githubusercontent.com/Utsumi24/BCOM/dev/src/';
+        const baseUrl = 'https://utsumi24.github.io/BCOM/dev/src/';
         
         // Load core modules first
         await loadScript(baseUrl + 'core/base.js');
