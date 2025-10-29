@@ -1,4 +1,4 @@
-# Changelog
+# Changelog 
 
 Any changes made to the addon will be here for easier documentation.
 
@@ -174,4 +174,5 @@ Any changes made to the addon will be here for easier documentation.
 - Basic outfit saving and loading functionality.
 - Added outfit manager button to character dialog.
 - Basic outfit menu interface. 
+
 
