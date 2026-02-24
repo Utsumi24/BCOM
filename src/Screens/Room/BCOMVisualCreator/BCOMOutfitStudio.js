@@ -200,13 +200,52 @@ function OutfitStudioRegisterHooks() {
         });
 
         // Hook DialogLeaveFocusItem to handle exiting extended item mode
+        // Must replicate BC's nuanced back-navigation logic:
+        // - From tighten submenu -> return to extended item menu (NOT full exit)
+        // - From extended sub-subscreen -> return to parent extended screen (NOT full exit)
+        // - From main extended screen -> full exit back to item grid
         modApi.hookFunction('DialogLeaveFocusItem', 0, (args, next) => {
             if (CurrentScreen === "BCOMOutfitStudio") {
-                // If we're in extended item mode, exit it properly
-                if (OutfitStudioInExtendedItem) {
+                if (!OutfitStudioInExtendedItem) return;
+
+                // Case 1: We're in a tighten/loosen submenu
+                if (typeof DialogTightenLoosenItem !== 'undefined' && DialogTightenLoosenItem != null) {
+                    const item = DialogTightenLoosenItem;
+                    // Exit the tighten submenu
+                    if (typeof TightenLoosenItemExit === 'function') {
+                        TightenLoosenItemExit();
+                    }
+                    // If DialogFocusItem is still set, we entered tightening from the extended screen
+                    // Go back to the extended item menu, not fully out
+                    if (DialogFocusItem) {
+                        DialogMenuMode = "extended";
+                        return;
+                    }
+                    // Otherwise fully exit extended mode
                     OutfitStudioExitExtendedItem();
+                    return;
                 }
-                return; // Don't call BC's DialogLeaveFocusItem
+
+                // Case 2: We're in an extended item menu (possibly a sub-subscreen)
+                if (DialogFocusItem != null) {
+                    const item = DialogFocusItem;
+                    // Call ExtendedItemExit - this may only exit a sub-subscreen
+                    if (typeof ExtendedItemExit === 'function') {
+                        ExtendedItemExit();
+                    }
+                    // If DialogFocusItem is STILL set after ExtendedItemExit,
+                    // we only exited a sub-subscreen - stay in extended mode
+                    if (DialogFocusItem) {
+                        return;
+                    }
+                    // DialogFocusItem was cleared - we fully exited
+                    OutfitStudioExitExtendedItem();
+                    return;
+                }
+
+                // Fallback: fully exit
+                OutfitStudioExitExtendedItem();
+                return;
             }
             return next(args);
         });
@@ -880,17 +919,25 @@ function BCOMOutfitStudioClick() {
         CurrentCharacter = OutfitStudioChar;
 
         try {
-            // Check for exit button click
-            if (MouseIn(1885, 25, 90, 90)) {
-                OutfitStudioExitExtendedItem();
-                return;
-            }
+            // NOTE: We do NOT intercept the exit button (1885, 25, 90, 90) here.
+            // The item's own Click function (via NoArch.Click) handles exit button natively,
+            // using ExtendedItemSubscreen to properly navigate back through subscreen levels.
+            // When it reaches the top level, it calls DialogLeaveFocusItem() which our hook handles.
 
             // IMPORTANT: Check DialogMenuMode first to route to the correct Click function
             // When in a submenu like "tighten", we need to call the submenu's Click function, not the item's
             if (DialogMenuMode === "tighten" && typeof TightenLoosenItemClick === 'function') {
                 // In tighten/loosen submenu
                 TightenLoosenItemClick();
+                // TightenLoosenItemClick handles exit internally by clearing DialogTightenLoosenItem
+                // but does NOT change DialogMenuMode. We need to navigate back if it exited.
+                if (DialogTightenLoosenItem == null) {
+                    if (DialogFocusItem) {
+                        DialogMenuMode = "extended";
+                    } else {
+                        OutfitStudioExitExtendedItem();
+                    }
+                }
                 return;
             }
 
@@ -1082,8 +1129,9 @@ function OutfitStudioOpenLockMenu() {
 function OutfitStudioPopulateLockGrid(locks) {
     if (!OutfitStudioDOMGrid) return;
 
-    // Clear grid
+    // Clear grid and reset scroll position to top
     OutfitStudioDOMGrid.innerHTML = '';
+    OutfitStudioDOMGrid.scrollTo({ top: 0, behavior: "instant" });
 
     // Check if current item has a lock with configurable properties (for Edit Properties button)
     const equippedItem = InventoryGet(OutfitStudioChar, OutfitStudioSelectedGroup.Name);
@@ -1344,13 +1392,15 @@ function OutfitStudioExitExtendedItem() {
     // We'll turn it off at the very end
     const wasInExtendedMode = OutfitStudioInExtendedItem;
 
-    // Call the Exit function if it exists
-    if (wasInExtendedMode) {
+    // Call the Exit function if it exists and hasn't already been called by ExtendedItemExit()
+    // When called from our DialogLeaveFocusItem hook, ExtendedItemExit() already called the Exit
+    // function and cleared DialogFocusItem. Only call Exit if DialogFocusItem is still set.
+    if (wasInExtendedMode && DialogFocusItem) {
         const item = InventoryGet(OutfitStudioChar, OutfitStudioSelectedGroup.Name);
         if (item) {
             let exitFuncName;
             // Check if we were editing lock properties
-            if (DialogFocusSourceItem && DialogFocusItem && DialogFocusItem.Asset.Group.Name === "ItemMisc") {
+            if (DialogFocusSourceItem && DialogFocusItem.Asset.Group.Name === "ItemMisc") {
                 // Editing lock properties
                 const lockName = DialogFocusItem.Asset.Name;
                 exitFuncName = `InventoryItemMisc${lockName}Exit`;
@@ -1368,6 +1418,10 @@ function OutfitStudioExitExtendedItem() {
     // Clean up BC's extended item context
     DialogFocusItem = null;
     DialogFocusSourceItem = null;
+    // Clear subscreen state to prevent stale values
+    if (typeof ExtendedItemSubscreen !== 'undefined') {
+        ExtendedItemSubscreen = null;
+    }
 
     // IMPORTANT: Clean up DOM elements BEFORE refreshing/rebuilding
     // This prevents BC from re-rendering the zone overlays
@@ -1511,7 +1565,7 @@ function OutfitStudioSelectGroup(group) {
     OutfitStudioPopulateGrid(items);
 }
 
-// Helper function to check if an item is currently worn (including Craft data comparison)
+// Helper function to check if an item is currently worn
 function OutfitStudioIsItemWorn(item) {
     if (!item.Asset || !OutfitStudioChar) return false;
 
@@ -1520,16 +1574,11 @@ function OutfitStudioIsItemWorn(item) {
         return false;
     }
 
-    // Also check if Craft data matches (if present)
-    if (item.Craft || equippedItem.Craft) {
-        // If one has Craft and the other doesn't, they're different
-        if (!item.Craft || !equippedItem.Craft) return false;
-
-        // Compare Craft data (simplified - just check if they're the same object or have matching properties)
-        // BC's Craft data includes Name, Item, Property, etc.
-        return JSON.stringify(item.Craft) === JSON.stringify(equippedItem.Craft);
-    }
-
+    // An item is considered worn if the same asset is equipped in that slot.
+    // We don't compare Craft data here because:
+    // - Craft is cosmetic (name, color, description) and doesn't identify a different item type
+    // - The worn item may be a crafted version not in Player.Crafting (e.g. applied by someone else),
+    //   in which case it only appears in the list as a plain asset entry without Craft data
     return true;
 }
 
@@ -1539,32 +1588,89 @@ function OutfitStudioPopulateGrid(items) {
     // Hide grid briefly to prevent visual flash during button creation
     OutfitStudioDOMGrid.style.opacity = '0';
 
-    // Clear grid
+    // Clear grid and reset scroll position to top (matches BC's base game behavior)
     OutfitStudioDOMGrid.innerHTML = '';
+    OutfitStudioDOMGrid.scrollTo({ top: 0, behavior: "instant" });
 
-    // Sort items: Remove button removed from list (will be drawn at top), worn items first, then usable, then blocked
+    // Sort items using BC's sort order system:
+    // Worn > Favorited+Crafted (usable) > Usable (alphabetical) > Favorited (unusable) > Unusable > Blocked
+
+    // Pre-compute which single item in the list represents the worn item.
+    // Priority: crafted entry whose Craft data matches the equipped item's Craft data.
+    // Fallback: plain asset entry (no Craft) when the worn item is crafted but not in Player.Crafting.
+    // This ensures exactly one item is ever marked as worn, even when both a crafted and a plain
+    // entry for the same asset exist in the list.
+    let wornItemInList = null;
+    if (OutfitStudioChar && items.length > 0) {
+        const firstAsset = items.find(i => i.Asset)?.Asset;
+        if (firstAsset) {
+            const equippedItem = InventoryGet(OutfitStudioChar, firstAsset.Group.Name);
+            if (equippedItem) {
+                // First pass: try to find an exact craft match
+                if (equippedItem.Craft) {
+                    wornItemInList = items.find(item =>
+                        item.Asset?.Name === equippedItem.Asset.Name &&
+                        item.Craft &&
+                        JSON.stringify(item.Craft) === JSON.stringify(equippedItem.Craft)
+                    ) || null;
+                }
+                // Second pass: fall back to the plain asset entry (handles crafted item not in Player.Crafting)
+                if (!wornItemInList) {
+                    wornItemInList = items.find(item =>
+                        item.Asset?.Name === equippedItem.Asset.Name &&
+                        !item.Craft
+                    ) || null;
+                }
+            }
+        }
+    }
+
     const sortedItems = [...items].sort((a, b) => {
         // Remove button will be drawn separately at the top of the screen, not in the grid
         if (a.IsRemove) return 1; // Move to end so we can filter it out
         if (b.IsRemove) return -1;
 
-        // Check if items are worn (must match both Asset name AND Craft data)
-        const aWorn = a.Asset ? OutfitStudioIsItemWorn(a) : false;
-        const bWorn = b.Asset ? OutfitStudioIsItemWorn(b) : false;
+        // Build sort keys matching BC's DialogSortOrder tiers:
+        // 2=Equipped, 3=BothFavoriteUsable, 5=PlayerFavoriteUsable, 6=Usable,
+        // 8=PlayerFavoriteUnusable, 9=Unusable, 10=Blocked
+        const getSortKey = (item) => {
+            if (!item.Asset) return "99";
 
-        // Worn items go to the top
-        if (aWorn && !bWorn) return -1;
-        if (!aWorn && bWorn) return 1;
+            const description = item.Asset.Description || item.Asset.Name || "";
+            const craftName = item.Craft?.Name || "";
 
-        // Permission-blocked items go to the very bottom
-        if (a.PermissionBlocked && !b.PermissionBlocked) return 1;
-        if (!a.PermissionBlocked && b.PermissionBlocked) return -1;
+            // Check if currently worn (reference equality - only one item can be worn)
+            if (item === wornItemInList) {
+                return `2${description}${craftName}`;
+            }
 
-        // Then prerequisite-blocked items (but above permission-blocked)
-        if (a.Blocked && !b.Blocked) return 1;
-        if (!a.Blocked && b.Blocked) return -1;
+            // Check if blocked (permission or prerequisite)
+            if (item.PermissionBlocked || item.Blocked) {
+                // Check if favorited even though blocked
+                const isFavorite = typeof InventoryIsFavorite === 'function'
+                    && InventoryIsFavorite(Player, item.Asset.Name, item.Asset.Group.Name);
+                if (isFavorite) {
+                    return `8${description}${craftName}`; // PlayerFavoriteUnusable
+                }
+                return item.PermissionBlocked ? `99${description}${craftName}` : `9${description}${craftName}`; // Blocked / Unusable
+            }
 
-        return 0;
+            // Usable items - check if favorited or crafted
+            const isFavorite = typeof InventoryIsFavorite === 'function'
+                && InventoryIsFavorite(Player, item.Asset.Name, item.Asset.Group.Name);
+
+            if (item.Craft) {
+                // Crafted items get bumped to PlayerFavoriteUsable tier (like BC does)
+                return `5${description}${craftName}`;
+            }
+            if (isFavorite) {
+                return `5${description}${craftName}`; // PlayerFavoriteUsable
+            }
+
+            return `6${description}${craftName}`; // Usable
+        };
+
+        return getSortKey(a).localeCompare(getSortKey(b), undefined, { numeric: true, sensitivity: 'base' });
     });
 
     // Filter out the Remove button - it will be drawn separately at the top
@@ -1574,8 +1680,8 @@ function OutfitStudioPopulateGrid(items) {
     // Create buttons using BC's ElementButton system
     gridItems.forEach((item, index) => {
         if (item.Asset) {
-            // Check if worn (including Craft data)
-            const worn = OutfitStudioIsItemWorn(item);
+            // Check if worn using the pre-computed reference (same logic as sort)
+            const worn = item === wornItemInList;
 
             // For worn items, pass the actual equipped item to BC's button system
             // This ensures BC can render all status icons (lock, effects, etc.) automatically
@@ -1583,7 +1689,13 @@ function OutfitStudioPopulateGrid(items) {
             if (worn) {
                 const equippedItem = InventoryGet(OutfitStudioChar, OutfitStudioSelectedGroup.Name);
                 // Pass the full equipped item so BC's CreateForAsset can access Property, Color, Craft, etc.
-                buttonData = equippedItem;
+                // Normalize Craft.Effects to {} if missing - BC's CreateCraftTooltipContent calls
+                // Object.entries(craft.Effects) with no null guard, which crashes on externally-crafted items.
+                if (equippedItem?.Craft && equippedItem.Craft.Effects == null) {
+                    buttonData = { ...equippedItem, Craft: { ...equippedItem.Craft, Effects: {} } };
+                } else {
+                    buttonData = equippedItem;
+                }
             } else {
                 // For non-worn items, create a simple button data object
                 buttonData = {
@@ -1741,12 +1853,8 @@ function OutfitStudioSaveOutfit() {
                 // It will automatically detect the existing outfit and overwrite it
                 window.BCOM_OutfitManager.SaveOutfit(OutfitStudioChar, editMode.outfitName);
 
-                // Clear edit mode after save
-                window.BCOM_OutfitStudio_EditMode = null;
-                // Also clear the checkbox state
-                if (window.BCOM_ModInitializer) {
-                    window.BCOM_ModInitializer.setState({ outfitToEdit: null });
-                }
+                // Do NOT clear edit mode - the outfit is still selected and the user
+                // should remain in "editing" mode for this outfit after saving.
             } else {
                 console.error('[Outfit Studio] BCOM_OutfitManager.SaveOutfit not available!');
                 OutfitStudioClearTooltips();
