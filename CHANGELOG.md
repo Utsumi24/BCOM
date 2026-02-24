@@ -2,7 +2,18 @@
 
 Any changes made to the addon will be here for easier documentation.
 
-## [v0.8]
+## [v0.8.1]
+- Fixed item sorting in the Outfit Studio to mimic the base game better
+- Fixed it so when navigating to other body zones, it resets the scroll position to the top of the list instead of retaining its position from the previous body zone
+- Fixed subscreen navigation to properly mimic the base game's functionality when editing item properties and properly breadcumb its way back when clicking on the exit button
+- Fixed a crash related to the Tighten/Loosen subscreen
+- Fixed how editing saved outfits are handled after the outfit has been overwritten.  The editing of the existing outfit will be retained until it is unchecked in the Outfit Manager
+- Fixed a crash relating to key presses while inside the Outfit Manager screen
+- Outfits will now save properly and save the `Player.Appearance` so no more missing features. Any existing outfits will need to be updated. Old outfits will still work normally, but won't have all of the appearance data
+- Outfits saved from another player will respect `Player.Appearance` when saving as to not overwrite the Player's appearance when applying.  The same goes for when applying an outfit to another player
+- Added a checkbox to `Include Appearance` when loading an outfit.  This will not be available when another character is selected, only for your own character
+
+## [v0.8dev]
 - Converted the addon to a modular version.
 - Introducing the the "Outfit Studio". A new addition that lets the player create custom outfits without having to tie up another player/NPC or themselves. It allows the player to apply restraints/locks/clothing to a "dummy" character and save the entire thing to the Outfit Manager or export as a BCX code.  The Outfit Studio also allows you to edit saved Outfit Manager outfits as well as import an outfit from a BCX code.
 - Added checkboxes to the left of each Outfit Manager outfit so it can be edited in the Outfit Studio.
@@ -174,5 +185,6 @@ Any changes made to the addon will be here for easier documentation.
 - Basic outfit saving and loading functionality.
 - Added outfit manager button to character dialog.
 - Basic outfit menu interface. 
+
 
 
