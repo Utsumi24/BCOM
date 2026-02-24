@@ -2,11 +2,29 @@
 
 Any changes made to the addon will be here for easier documentation.
 
+## [v0.8.1]
+- Fixed item sorting in the Outfit Studio to mimic the base game better
+- Fixed it so when navigating to other body zones, it resets the scroll position to the top of the list instead of retaining its position from the previous body zone
+- Fixed subscreen navigation to properly mimic the base game's functionality when editing item properties and properly breadcumb its way back when clicking on the exit button
+- Fixed a crash related to the Tighten/Loosen subscreen
+- Fixed how editing saved outfits are handled after the outfit has been overwritten.  The editing of the existing outfit will be retained until it is unchecked in the Outfit Manager
+- Fixed a crash relating to key presses while inside the Outfit Manager screen
+- Outfits will now save properly and save the `Player.Appearance` so no more missing features. Any existing outfits will need to be updated. Old outfits will still work normally, but won't have all of the appearance data
+- Outfits saved from another player will respect `Player.Appearance` when saving as to not overwrite the Player's appearance when applying.  The same goes for when applying an outfit to another player
+- Added a checkbox to `Include Appearance` when loading an outfit.  This will not be available when another character is selected, only for your own character
+
+## [v0.8dev]
+- Converted the addon to a modular version
+- Introducing the the "Outfit Studio". A new addition that lets the player create custom outfits without having to tie up another player/NPC or themselves. It allows the player to apply restraints/locks/clothing to a "dummy" character and save the entire thing to the Outfit Manager or export as a BCX code.  The Outfit Studio also allows you to edit saved Outfit Manager outfits as well as import an outfit from a BCX code
+-- Please note: Applying DOGS padlocks is supported, but not editing the properties of the locks
+- Added checkboxes to the left of each Outfit Manager outfit so it can be edited in the Outfit Studio
+- Increased max outfits to `100`
+
 ## [v0.7.8]
 - Added tab auto-completion for the /bcom command.  Type "/bcom" and press tab to cycle through all players in the chatroom (in the order they're listed). Type in a partial name to only cycle through players of the partial name that was entered
 - Added `ChatRoomRefreshChatSettings` when exiting the Outfit Manager when using the /bcom command so blind/deafened effects will apply to chat properly
 - Changed player permission logic: You can now open the Outfit Manager on any player regardless of permissions, but you will not be able to apply outfits if you do not have permissions. Attempting to apply an outfit will show a "You don't have permission to apply outfits to this character" notification
-	- If you do not have permission to apply outfits to the `CurrentCharacter`, all outfits listed will be pink for visual feedback
+	-If you do not have permission to apply outfits to the `CurrentCharacter`, all outfits listed will be pink for visual feedback
 - Changed Notification duration from a default of `3` seconds to `5` seconds with the new Toasts notification system
 - Added a "Padlocks" dropdown menu to give the user the option to remove or replace all locks on an outfit that is being applied
 	- When selecting a padlock from the dropdown that has configurable options, a modal-based dialog box will appear that will let you configure the padlock's properties (password, timer, combo, etc).  If the dialog box is cancelled, the default properties will be used
