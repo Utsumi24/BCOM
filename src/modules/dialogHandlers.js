@@ -1103,7 +1103,7 @@ function restoreOutfits() {
                         }
 
                         // Check outfit limit
-                        const MAX_OUTFITS = window.BCOM_Base.getUIConstants().MAX_OUTFITS || 80;
+                        const MAX_OUTFITS = window.BCOM_ModInitializer.UI_CONSTANTS.MAX_OUTFITS || 80;
                         if (finalOutfits.outfits.length > MAX_OUTFITS) {
                             if (!confirm(`This would exceed the maximum of ${MAX_OUTFITS} outfits. Import only the first ${MAX_OUTFITS} outfits?`)) {
                                 return;
