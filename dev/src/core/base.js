@@ -1,7 +1,7 @@
 // BCOM Base Module - Core functionality and initialization
 
 // Core constants and configuration
-const VERSION_NUMBER = "0.8dev";
+const VERSION_NUMBER = "0.8.1";
 const STORAGE_PREFIX = "OutfitManager_";
 
 // Mod initialization state
