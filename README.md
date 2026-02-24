@@ -14,7 +14,7 @@ It allows you to save outfits (including restraints) to your browser's local sto
 You don't have to. It's merely just an alternate way of saving custom outfits. The biggest reason I made this is from hearing a bunch of people losing their wardrobe outfits and me wanting to have some kind of alternative way of saving them... and I was also affected by wardrobe loss too.
 
 ### How many outfits can I save?
-Up to 80.  I figured it was a nice round number. ¯\\_(ツ)_/¯
+Up to 100.  I figured it was a nice round number. ¯\\_(ツ)_/¯
 This number could be changed in the future.
 
 ### Tampermonkey/Violentmonkey install:
