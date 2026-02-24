@@ -2,6 +2,9 @@
 
 Any changes made to the addon will be here for easier documentation.
 
+## [v0.8.1.1]
+- Fixed error when importing from a backup file
+
 ## [v0.8.1]
 - Fixed item sorting in the Outfit Studio to mimic the base game better
 - Fixed it so when navigating to other body zones, it resets the scroll position to the top of the list instead of retaining its position from the previous body zone
@@ -186,3 +189,4 @@ Any changes made to the addon will be here for easier documentation.
 - Basic outfit saving and loading functionality.
 - Added outfit manager button to character dialog.
 - Basic outfit menu interface. 
+
