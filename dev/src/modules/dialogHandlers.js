@@ -11,11 +11,11 @@ function registerDialogHooks(modApi) {
             Unload: () => {},
             Click: () => {},
             Draw: () => {},
+            KeyDown: () => false,
             Resize: () => {},
             Exit: () => {},
             ids: { status: null }
         };
-        console.log("[BCOM] Registered 'outfits' dialog mode with BC");
     }
     
     modApi.hookFunction("DialogClick", 0, (args, next) => {
@@ -180,6 +180,14 @@ function registerDialogHooks(modApi) {
                 return;
             }
 
+            // Full Appearance checkbox - only when viewing own character
+            const isOwnCharacter = CurrentCharacter === Player ||
+                CurrentCharacter.MemberNumber === Player.MemberNumber;
+            if (isOwnCharacter && MouseIn(1810, 591, 30, 30)) {
+                window.BCOM_ModInitializer.setState({ includeAppearance: !state.includeAppearance });
+                return;
+            }
+
             // Changelog link click (bottom right corner) - coordinates match display
             const changelogText = "Changelog";
             const versionX = 1957;
@@ -204,6 +212,7 @@ function registerDialogHooks(modApi) {
                     isFolderManagementMode: false,
                     hairOnly: false,
                     applyHairWithOutfit: false,
+                    includeAppearance: false,
                     selectedPadlock: "Keep Original",
                     selectedOutfits: []
                 });
@@ -263,7 +272,6 @@ function registerDialogHooks(modApi) {
                                 outfitName: outfit.name,
                                 outfitData: outfit.data
                             };
-                            console.log("[BCOM] Launching Outfit Studio in edit mode for:", outfit.name);
                         }
                     }
 
@@ -273,7 +281,6 @@ function registerDialogHooks(modApi) {
 
                 // Launch Visual Creator with modApi
                 if (window.BCOM_VisualCreator && window.BCOM_VisualCreator.BCOMOpenVisualCreator) {
-                    console.log("[BCOM] Visual Creator button clicked, launching...");
                     window.BCOM_VisualCreator.BCOMOpenVisualCreator(modApi).catch(error => {
                         console.error("[BCOM] Error launching Visual Creator:", error);
                     });
@@ -726,9 +733,12 @@ function registerDialogHooks(modApi) {
                         const newSelection = (currentlySelected === outfit.name) ? null : outfit.name;
                         window.BCOM_ModInitializer.setState({ outfitToEdit: newSelection });
 
-                        // Clear the edit mode object when unchecking
+                        // Clear the edit mode and work-in-progress when unchecking
                         if (newSelection === null) {
                             window.BCOM_OutfitStudio_EditMode = null;
+                            // Also clear work-in-progress so the Studio starts fresh next time,
+                            // not with the previously loaded outfit still on the dummy character.
+                            window.BCOM_OutfitStudio_WorkInProgress = null;
                         }
                         return;
                     }

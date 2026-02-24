@@ -43,7 +43,6 @@ function createFolder(folderName) {
         // Save to storage
         localStorage.setItem(storageKey, JSON.stringify(outfitStorage));
         
-        console.log(`BCOM: Created folder "${trimmedName}"`);
         return true;
         
     } catch (error) {
@@ -97,7 +96,6 @@ function deleteFolder(folderName) {
             window.BCOM_ModInitializer.setState({ currentFolder: "Main" });
         }
         
-        console.log(`BCOM: Deleted folder "${folderName}"`);
         return true;
         
     } catch (error) {
@@ -139,7 +137,6 @@ function moveOutfitsToFolder(outfitNames, targetFolder) {
         // Save to storage
         localStorage.setItem(storageKey, JSON.stringify(outfitStorage));
         
-        console.log(`BCOM: Moved ${movedCount} outfits to folder "${targetFolder}"`);
         return movedCount > 0;
         
     } catch (error) {
@@ -199,7 +196,6 @@ function navigateToFolder(folderName) {
     }
     
     window.BCOM_ModInitializer.setState({ currentFolder: folderName });
-    console.log(`BCOM: Navigated to folder "${folderName}"`);
     return true;
 }
 
@@ -213,7 +209,6 @@ function toggleFolderManagementMode() {
         selectedOutfits: [] // Clear selections when toggling
     });
     
-    console.log(`BCOM: Folder management mode ${newMode ? 'enabled' : 'disabled'}`);
     return newMode;
 }
 

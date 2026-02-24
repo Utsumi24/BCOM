@@ -290,19 +290,43 @@ function SaveOutfit(C, name = null) {
             }
         }
 
-        // Convert appearance to BCX format outfit data
-        const outfitData = C.Appearance
-            .filter(item => {
+        // Convert appearance to BCX format outfit data.
+        // When saving own character: capture all appearance/item groups.
+        // When saving another player: use Player's body features (non-clothing Appearance items)
+        // as the identity base, then layer the other character's clothing and restraints on top.
+        // This preserves the player's own identity (eyes, skin, hair, etc.) while capturing
+        // the outfit items from the other character.
+        const isOwnCharacter = C === Player ||
+            (typeof C.IsPlayer === 'function' && C.IsPlayer()) ||
+            C.MemberNumber === Player.MemberNumber;
+
+        let itemsToSave;
+        if (isOwnCharacter) {
+            // Save everything for own character — including required body features
+            // (eyes, skin, mouth, etc.) so the player can fully revert their appearance.
+            itemsToSave = C.Appearance.filter(item => {
+                const group = item?.Asset?.Group;
+                return group && (group.Category === "Appearance" || group.Category === "Item");
+            });
+        } else {
+            // Player's optional body features (AllowNone=true, non-clothing: hair, tattoos, markings)
+            // Excludes required body identity items (AllowNone=false: eyes, skin, mouth, etc.)
+            const playerBodyItems = Player.Appearance.filter(item => {
+                const group = item?.Asset?.Group;
+                return group && group.Category === "Appearance" && !group.Clothing && group.AllowNone;
+            });
+            // Other character's clothing and restraints only
+            const otherClothingItems = C.Appearance.filter(item => {
                 const group = item?.Asset?.Group;
                 return group && (
-                    group.Clothing ||
-                    group.Name.includes("Item") ||
-                    group.Name.includes("BodyMarkings") ||
-                    group.Name === "HairFront" ||
-                    group.Name === "HairBack"
+                    (group.Category === "Appearance" && group.Clothing) ||
+                    group.Category === "Item"
                 );
-            })
-            .map(item => ({
+            });
+            itemsToSave = [...playerBodyItems, ...otherClothingItems];
+        }
+
+        const outfitData = itemsToSave.map(item => ({
                 Name: item.Asset.Name,
                 Group: item.Asset.Group.Name,
                 Color: Array.isArray(item.Color) ? [...item.Color] :
@@ -486,7 +510,7 @@ function LoadOutfit(C, outfitName) {
             item.Asset.BodyCosplay ||
             // Keep hair if applyHairWithOutfit is false
             (!state.applyHairWithOutfit && (item.Asset.Group.Name === "HairFront" || item.Asset.Group.Name === "HairBack")) ||
-            // Keep items that aren't clothing, items, body markings, or hair
+            // Keep items outside the saveable categories (not clothing, item groups, body markings, or hair)
             !(item.Asset.Group.Clothing ||
               item.Asset.Group.Name.includes("Item") ||
               item.Asset.Group.Name.includes("BodyMarkings") ||
@@ -532,14 +556,30 @@ function LoadOutfit(C, outfitName) {
                 itemProperty = applyPadlockLogic(itemProperty, state.selectedPadlock, state.padlockConfigs);
             }
 
-            const newItem = {
-                Asset: asset,
-                Color: item.Color || "Default",
-                Property: itemProperty,
-                Difficulty: asset.Difficulty !== undefined ? asset.Difficulty + (bondageSkill ? bondageSkill.Level : 0) : 0
-            };
-            if (item.Craft) newItem.Craft = item.Craft;
-            C.Appearance.push(newItem);
+            const difficulty = asset.Difficulty !== undefined ? asset.Difficulty + (bondageSkill ? bondageSkill.Level : 0) : 0;
+
+            // If the item is still present (AllowNone=false, survived the clearing steps),
+            // update it in place to avoid duplicate entries and rendering issues from push.
+            // Only do this when "Full Appearance" is enabled — otherwise skip body identity items.
+            const existingItem = InventoryGet(C, item.Group);
+            if (existingItem) {
+                if (!state.includeAppearance) continue;
+                existingItem.Asset = asset;
+                existingItem.Color = item.Color || "Default";
+                existingItem.Property = itemProperty;
+                existingItem.Difficulty = difficulty;
+                if (item.Craft) existingItem.Craft = item.Craft;
+                else delete existingItem.Craft;
+            } else {
+                const newItem = {
+                    Asset: asset,
+                    Color: item.Color || "Default",
+                    Property: itemProperty,
+                    Difficulty: difficulty
+                };
+                if (item.Craft) newItem.Craft = item.Craft;
+                C.Appearance.push(newItem);
+            }
         }
 
         CharacterRefresh(C);
@@ -568,28 +608,48 @@ function getCurrentOutfitBCXCode(C, includeHair = null, forceHairOnly = false, p
         // Use the passed padlockOption parameter if provided, otherwise use the global setting
         const padlockSetting = padlockOption !== null ? padlockOption : state.selectedPadlock;
         
-        const outfitData = C.Appearance
+        // Same identity-preserving logic as SaveOutfit: use Player's body for other characters
+        const isOwnCharacter = C === Player ||
+            (typeof C.IsPlayer === 'function' && C.IsPlayer()) ||
+            C.MemberNumber === Player.MemberNumber;
+
+        let itemsToProcess;
+        if (isOwnCharacter) {
+            itemsToProcess = C.Appearance;
+        } else {
+            // Player's optional body features only (AllowNone=true excludes eyes, skin, etc.)
+            const playerBodyItems = Player.Appearance.filter(item => {
+                const group = item?.Asset?.Group;
+                return group && group.Category === "Appearance" && !group.Clothing && group.AllowNone;
+            });
+            const otherClothingItems = C.Appearance.filter(item => {
+                const group = item?.Asset?.Group;
+                return group && (
+                    (group.Category === "Appearance" && group.Clothing) ||
+                    group.Category === "Item"
+                );
+            });
+            itemsToProcess = [...playerBodyItems, ...otherClothingItems];
+        }
+
+        const outfitData = itemsToProcess
             .filter(item => {
                 const group = item?.Asset?.Group;
                 if (!group) return false;
-                
+
                 // If in hair-only mode, ONLY include hair items
                 if (isHairOnly) {
                     return group.Name === "HairFront" || group.Name === "HairBack";
                 }
-                
-                // Otherwise, include clothing, items, and hair (if shouldIncludeHair is true)
+
+                // Skip hair if shouldIncludeHair is false
                 if (!shouldIncludeHair && (group.Name === "HairFront" || group.Name === "HairBack")) {
                     return false;
                 }
-                
-                return (
-                    group.Clothing ||
-                    group.Name.includes("Item") ||
-                    group.Name.includes("BodyMarkings") ||
-                    group.Name === "HairFront" ||
-                    group.Name === "HairBack"
-                );
+
+                if (group.Category === "Item") return true;
+                if (group.Category !== "Appearance") return false;
+                return group.Clothing || group.AllowNone;
             })
             .map(item => {
                 // Handle padlock replacement/removal
@@ -640,7 +700,6 @@ function DeleteOutfit(outfitName) {
         // Save updated storage
         localStorage.setItem(storageKey, JSON.stringify(outfitStorage));
         
-        console.log(`BCOM: Deleted outfit "${outfitName}"`);
         return true;
         
     } catch (error) {
