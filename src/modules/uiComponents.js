@@ -141,9 +141,23 @@ function DrawOutfitMenu() {
         DrawImageResize("Icons/Checked.png", 1815, 522, 20, 20);
     }
 
-    // Padlock Replacement dropdown - shifted down
-    DrawTextFit("Padlocks:", 1868, 577, 120, "White", "Black");
-    drawPadlockDropdown();
+    // Full Appearance checkbox - only shown when viewing own character
+    const isOwnCharacter = CurrentCharacter === Player ||
+        CurrentCharacter.MemberNumber === Player.MemberNumber;
+    if (isOwnCharacter) {
+        DrawTextFit("Full Appearance", 1868, 577, 120, "White", "Black");
+        DrawButton(1810, 591, 30, 30, "", "White");
+        if (state.includeAppearance) {
+            DrawImageResize("Icons/Checked.png", 1815, 596, 20, 20);
+        }
+        // Padlock Replacement dropdown - shifted down to make room for Full Appearance checkbox
+        DrawTextFit("Padlocks:", 1868, 647, 120, "White", "Black");
+        drawPadlockDropdown(647);
+    } else {
+        // Padlock Replacement dropdown - original position
+        DrawTextFit("Padlocks:", 1868, 577, 120, "White", "Black");
+        drawPadlockDropdown(577);
+    }
     
     // Folder management controls (use exact original logic)
     const outfitStorage = window.BCOM_Storage.getCachedStorageData();
@@ -495,7 +509,7 @@ function drawUIControls() {
 }
 
 // Draw padlock replacement dropdown
-function drawPadlockDropdown() {
+function drawPadlockDropdown(labelY = 577) {
     const state = window.BCOM_ModInitializer.getState();
     
     // Create or update the padlock dropdown
@@ -548,7 +562,7 @@ function drawPadlockDropdown() {
                 
                 return true;
             } catch (error) {
-                console.log("BCOM: Error checking padlock permissions:", error);
+                console.warn("BCOM: Error checking padlock permissions:", error);
                 return true; // Default to allowed if we can't check
             }
         }
@@ -631,14 +645,14 @@ function drawPadlockDropdown() {
             
         } catch (error) {
             console.error("Failed to create padlock dropdown:", error);
-            // Fallback to text display - updated coordinates for shifted position
-            DrawTextFit(state.selectedPadlock, 1868, 597, 120, "LightGray", "Black");
+            // Fallback to text display
+            DrawTextFit(state.selectedPadlock, 1868, labelY + 20, 120, "LightGray", "Black");
         }
     }
-    
-    // Position the dropdown if it exists - updated coordinates for shifted position
+
+    // Position the dropdown if it exists
     if (padlockDropdown && typeof ElementPosition === 'function') {
-        ElementPosition(padlockDropdownId, 1890, 605, 160, 24);
+        ElementPosition(padlockDropdownId, 1890, labelY + 28, 160, 24);
         padlockDropdown.value = state.selectedPadlock; // Ensure current selection is displayed
         
         // Apply styling without overriding position - let ElementPosition handle positioning
@@ -972,20 +986,17 @@ function registerHooks(modApi) {
 
             // Set DialogMenuMode to previous mode for the original function to handle
             DialogMenuMode = state.PreviousDialogMode;
-            console.log(`DialogMenuBack: Set DialogMenuMode to ${state.PreviousDialogMode}`);
 
             // Properly remove the import field if it exists
             const importElement = document.getElementById("OutfitManagerImport");
             if (importElement) {
                 importElement.remove();
-                console.log("DialogMenuBack: Removed import field");
             }
 
             // Properly remove the padlock dropdown if it exists
             const padlockDropdown = document.getElementById("PadlockReplacementDropdown");
             if (padlockDropdown) {
                 padlockDropdown.remove();
-                console.log("DialogMenuBack: Removed padlock dropdown");
             }
         }
 
@@ -1062,6 +1073,7 @@ function registerHooks(modApi) {
                         isFolderManagementMode: false,
                         hairOnly: false,
                         applyHairWithOutfit: false,
+                        includeAppearance: false,
                         selectedPadlock: window.selectedPadlock || "Keep Original",
                         selectedOutfits: []
                     });

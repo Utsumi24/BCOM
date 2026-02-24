@@ -22,6 +22,7 @@ let PreviousDialogMode = "items";
 let isSortMode = false;
 let applyHairWithOutfit = false;
 let hairOnly = false;
+let includeAppearance = false;
 let selectedPadlock = window.selectedPadlock || "Keep Original";
 let DialogOutfitPage = 0;
 let isExportMode = false;
@@ -123,7 +124,8 @@ function getState() {
         selectedOutfits,
         allowMultipleSelect,
         padlockConfigs,
-        outfitToEdit
+        outfitToEdit,
+        includeAppearance
     };
 }
 
@@ -143,6 +145,7 @@ function setState(newState) {
     if ('allowMultipleSelect' in newState) allowMultipleSelect = newState.allowMultipleSelect;
     if ('padlockConfigs' in newState) padlockConfigs = newState.padlockConfigs;
     if ('outfitToEdit' in newState) outfitToEdit = newState.outfitToEdit;
+    if ('includeAppearance' in newState) includeAppearance = newState.includeAppearance;
 }
 
 // Export for module system

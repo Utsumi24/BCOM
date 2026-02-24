@@ -48,8 +48,6 @@ function BCOMHandleVisualCreatorClick() {
  * @param {Object} modApi - BC Mod SDK API reference to pass to visual creator
  */
 async function BCOMOpenVisualCreator(modApi = null) {
-    console.log("[BCOM Integration] Launching Visual Creator");
-    
     // Save current BCOM state for return
     // TODO: Save any necessary state to restore when returning
     
@@ -79,12 +77,9 @@ function BCOMLaunchVisualCreatorDirect(modApi = null) {
     if (DialogMenuMode === "outfits") {
         if (window.BCOM_ModInitializer) {
             window.BCOM_SavedOutfitManagerState = window.BCOM_ModInitializer.getState();
-            console.log("[BCOM Integration] Saved Outfit Manager state:", window.BCOM_SavedOutfitManagerState);
         } else {
             console.warn("[BCOM Integration] BCOM_ModInitializer not available!");
         }
-    } else {
-        console.log("[BCOM Integration] Not in Outfit Manager - DialogMenuMode:", DialogMenuMode);
     }
 
     // Save current screen functions (including optional handlers)
@@ -106,8 +101,6 @@ function BCOMLaunchVisualCreatorDirect(modApi = null) {
     // If we're currently in dialog mode (like "outfits"), cleanly exit it first
     // NOTE: This happens AFTER we save the state above
     if (window.BCOM_PreviousDialogMenuMode === "outfits" || CurrentCharacter) {
-        console.log("[BCOM Integration] Cleaning up dialog mode before Visual Creator launch");
-
         // Clean up dialog state
         if (CurrentCharacter) {
             CurrentCharacter = null;
@@ -141,7 +134,6 @@ function BCOMLaunchVisualCreatorDirect(modApi = null) {
     // Small delay to ensure dialog cleanup completes before initializing
     setTimeout(() => {
         BCOMOutfitStudioLoad();
-        console.log("[BCOM Integration] Outfit Studio launched with clean transition");
     }, 50);
 }
 
@@ -185,7 +177,6 @@ function BCOMSaveVisualCreatorOutfit(appearance, outfitName = null) {
         existingOutfits.push(outfitData);
         localStorage.setItem("BCOMOutfits", JSON.stringify(existingOutfits));
         
-        console.log("[BCOM Integration] Saved visual creator outfit:", outfitData);
         return true;
         
     } catch (error) {
@@ -229,8 +220,6 @@ function BCOMExportVisualCreatorAsBCX(appearance) {
             });
         
         const bcxCode = bcxItems.join(';');
-        console.log("[BCOM Integration] Generated BCX code:", bcxCode);
-        
         return bcxCode;
         
     } catch (error) {
@@ -268,7 +257,6 @@ function BCOMLoadOutfitIntoVisualCreator(outfitData) {
             };
         }).filter(item => item !== null);
         
-        console.log("[BCOM Integration] Loaded outfit into visual creator:", appearance);
         return appearance;
         
     } catch (error) {
@@ -286,7 +274,6 @@ function BCOMGetSavedOutfitsForVisualCreator() {
         // TODO: Use existing BCOM outfit loading functionality
         // For now, load from localStorage as placeholder
         const outfits = JSON.parse(localStorage.getItem("BCOMOutfits") || "[]");
-        console.log(`[BCOM Integration] Found ${outfits.length} saved outfits`);
         return outfits;
         
     } catch (error) {
@@ -356,7 +343,6 @@ function BCOMImportBCXIntoVisualCreator(bcxCode) {
             appearance.push(appearanceItem);
         }
         
-        console.log(`[BCOM Integration] Imported ${appearance.length} items from BCX code`);
         return appearance;
         
     } catch (error) {
@@ -383,8 +369,6 @@ function BCOMIsVisualCreatorAvailable() {
  * @param {Object} modApi - BC Mod SDK API reference
  */
 function BCOMInitializeVisualCreatorIntegration(modApi) {
-    console.log("[BCOM Integration] Initializing Visual Creator integration");
-
     // Store modApi reference globally for the visual creator
     if (modApi) {
         window.BCOM_VisualCreator_ModApi = modApi;
@@ -396,9 +380,7 @@ function BCOMInitializeVisualCreatorIntegration(modApi) {
     // Note: No longer using dialog mode registration for subscreen approach
 
     // Check if visual creator is available
-    if (BCOMIsVisualCreatorAvailable()) {
-        console.log("[BCOM Integration] Visual Creator is available and ready");
-    } else {
+    if (!BCOMIsVisualCreatorAvailable()) {
         console.warn("[BCOM Integration] Visual Creator is not available");
     }
 }
@@ -408,8 +390,6 @@ function BCOMInitializeVisualCreatorIntegration(modApi) {
  * @param {Object} modApi - BC Mod SDK API reference
  */
 function BCOMRegisterVisualCreatorExitHooks(modApi) {
-    console.log("[BCOM Integration] Registering Visual Creator exit hooks");
-
     // Track if we're returning from Outfit Studio
     let returningFromOutfitStudio = false;
     let suppressDialogDraw = false;
@@ -446,22 +426,10 @@ function BCOMRegisterVisualCreatorExitHooks(modApi) {
 
     // Hook DialogLeave to ensure proper screen restoration after dialog exits
     modApi.hookFunction('DialogLeave', 1, (args, next) => {
-        console.log("[BCOM Integration Hook] DialogLeave called");
-        console.log("[BCOM Integration Hook] BEFORE DialogLeave - CurrentScreen:", CurrentScreen, "CurrentModule:", CurrentModule);
-        console.log("[BCOM Integration Hook] BEFORE DialogLeave - CurrentCharacter:", CurrentCharacter?.Name);
-        console.log("[BCOM Integration Hook] BEFORE DialogLeave - DialogMenuMode:", DialogMenuMode);
-        console.log("[BCOM Integration Hook] BEFORE DialogLeave - returningFromOutfitStudio:", returningFromOutfitStudio);
-        console.log("[BCOM Integration Hook] BEFORE DialogLeave - CurrentScreenFunctions valid:", !!CurrentScreenFunctions && typeof CurrentScreenFunctions.Run === 'function');
-
         // Capture the flag state before calling DialogLeave
         const wasReturningFromOutfitStudio = returningFromOutfitStudio;
 
         const result = next(args);
-
-        console.log("[BCOM Integration Hook] AFTER DialogLeave - CurrentScreen:", CurrentScreen, "CurrentModule:", CurrentModule);
-        console.log("[BCOM Integration Hook] AFTER DialogLeave - CurrentCharacter:", CurrentCharacter?.Name);
-        console.log("[BCOM Integration Hook] AFTER DialogLeave - DialogMenuMode:", DialogMenuMode);
-        console.log("[BCOM Integration Hook] AFTER DialogLeave - CurrentScreenFunctions valid:", !!CurrentScreenFunctions && typeof CurrentScreenFunctions.Run === 'function');
 
         // After DialogLeave runs, check if we came from Outfit Studio restoration
         // If dialog fully exited (DialogMenuMode is null and CurrentCharacter is cleared),
@@ -482,20 +450,16 @@ function BCOMRegisterVisualCreatorExitHooks(modApi) {
                                  (CurrentModule === "Room" && !CurrentCharacter);
 
             if (isMainScreen) {
-                console.log("[BCOM Integration Hook] Reloading main screen after Outfit Studio exit:", screenModule, screenName);
                 CommonSetScreen(screenModule, screenName);
                 // Only reset the flag after successfully reloading a main screen
                 returningFromOutfitStudio = false;
-            } else {
-                console.log("[BCOM Integration Hook] Skipping reload - not a main screen:", screenName);
-                // Don't reset the flag yet - we'll need it when we eventually return to a main screen
             }
+            // else: Don't reset the flag yet - we'll need it when we eventually return to a main screen
         }
 
         // Show chat room elements if we're in a chat room
         if (CurrentScreen === "ChatRoom" && !DialogMenuMode && !CurrentCharacter) {
             if (typeof ChatRoomShowElements === 'function') {
-                console.log("[BCOM Integration Hook] Dialog exited in ChatRoom, showing elements");
                 ChatRoomShowElements();
             }
         }
@@ -512,17 +476,13 @@ function BCOMRegisterVisualCreatorExitHooks(modApi) {
     // Store the flag setter globally so Outfit Studio exit can use it
     window.BCOM_SetReturningFromOutfitStudio = (value) => {
         returningFromOutfitStudio = value;
-        console.log("[BCOM Integration] Set returningFromOutfitStudio to:", value);
     };
-
-    console.log("[BCOM Integration] Visual Creator exit hooks registered");
 }
 
 /**
  * Placeholder function - no longer needed for subscreen approach
  */
 function BCOMRegisterVisualCreatorDialogMode() {
-    console.log("[BCOM Integration] Dialog mode registration skipped - using subscreen approach");
     return true;
 }
 
@@ -560,4 +520,3 @@ window.BCOM_VisualCreator = {
     BCOMRegisterVisualCreatorDialogMode
 };
 
-console.log("[BCOM Integration] Visual Creator integration module loaded");
