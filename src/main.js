@@ -3,6 +3,17 @@
 
 console.info("BCOM: Loading modular version...");
 
+// Derive the base URL from wherever this script was loaded from.
+// document.currentScript is only available during synchronous execution,
+// so we capture it here at the top level before any async context.
+const _BCOM_BASE_URL = (function() {
+    const src = document.currentScript?.src || '';
+    if (!src) throw new Error('BCOM: Could not determine script base URL.');
+    // Strip the filename to get the directory, e.g.:
+    //   https://utsumi24.github.io/BCOM/src/main.js -> https://utsumi24.github.io/BCOM/src/
+    return src.replace(/[^/]+$/, '');
+})();
+
 // Module loading utility
 function loadScript(src) {
     return new Promise((resolve, reject) => {
@@ -17,9 +28,7 @@ function loadScript(src) {
 // Load modules in dependency order
 async function loadModules() {
     try {
-        
-        //const baseUrl = 'https://raw.githubusercontent.com/Utsumi24/BCOM/dev/src/';
-        const baseUrl = 'http://localhost:8000/src/';
+        const baseUrl = _BCOM_BASE_URL;
         
         // Load core modules first
         await loadScript(baseUrl + 'core/base.js');
