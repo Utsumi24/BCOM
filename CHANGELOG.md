@@ -16,6 +16,8 @@ Any changes made to the addon will be here for easier documentation.
 - Outfits saved from another player will respect `Player.Appearance` when saving as to not overwrite the Player's appearance when applying.  The same goes for when applying an outfit to another player
 - Added a checkbox to `Include Appearance` when loading an outfit.  This will not be available when another character is selected, only for your own character
 
+**Any outfits saved prior to `v0.8.1` wlll need to be updated (overwritten) to save appearance data!**
+
 ## [v0.8dev]
 - Converted the addon to a modular version
 - Introducing the the "Outfit Studio". A new addition that lets the player create custom outfits without having to tie up another player/NPC or themselves. It allows the player to apply restraints/locks/clothing to a "dummy" character and save the entire thing to the Outfit Manager or export as a BCX code.  The Outfit Studio also allows you to edit saved Outfit Manager outfits as well as import an outfit from a BCX code
@@ -189,4 +191,5 @@ Any changes made to the addon will be here for easier documentation.
 - Basic outfit saving and loading functionality.
 - Added outfit manager button to character dialog.
 - Basic outfit menu interface. 
+
 
