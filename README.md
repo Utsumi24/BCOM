@@ -13,6 +13,10 @@ It allows you to save outfits (including restraints) to your browser's local sto
 ### Why use this over the game's default wardrobe system?
 You don't have to. It's merely just an alternate way of saving custom outfits. The biggest reason I made this is from hearing a bunch of people losing their wardrobe outfits and me wanting to have some kind of alternative way of saving them... and I was also affected by wardrobe loss too.
 
+### What is the Outfit Studio?
+The Outfit Studio is a way to create custom outfits without having to rely on another person, an alt, or even yourself to be your "mannequin".  It lets you apply restraints, clothing, and edit item properties all within the constraints of the base game itself (so no impossible creations).  Accidently added an arms item, got it all configurated and colored the way you like it, but forgot to put on mittens? You don't have to take them off in the Outfit Studio, just simply add it.
+**Please Note** - Certain item combinations may cause graphical bugs due to how certain poses are forced and the forced screen positioning of certain items vs the forced positioning of the character (in order to access all zones in a forced non-standing pose).  All base-game items will work with the Outfit Studio.  Use items not part of the base game at your own discretion (because it might cause a crash).  AFAIK, nearly all ECHO mod items work, but not 100% of them.
+
 ### How many outfits can I save?
 Up to 100.  I figured it was a nice round number. ¯\\_(ツ)_/¯
 This number could be changed in the future.
