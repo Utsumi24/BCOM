@@ -19,6 +19,7 @@ var OutfitStudioInHelp = false; // Track if we're showing the help screen
 var OutfitStudioHelpOverlay = null; // DOM element for help overlay
 var OutfitStudioNeedsRefresh = 0; // Counter for how many frames we should refresh after applying an item
 var OutfitStudioInAppearance = false; // Track if we're in the appearance screen
+var OutfitStudioInLayering = false; // Track if we're in the layering screen
 
 // ===== UTILITY FUNCTIONS =====
 // Clear all BC tooltips to prevent them from persisting after alerts
@@ -122,11 +123,6 @@ function OutfitStudioRegisterHooks() {
         window.OutfitStudio_SetDrawingZones = (value) => {
             isDrawingOurZones = value;
         };
-
-        // Hook CharacterAppearanceBuildCanvas (no logging to reduce spam)
-        modApi.hookFunction('CharacterAppearanceBuildCanvas', 0, (args, next) => {
-            return next(args);
-        });
 
         // Hook DialogKeyDown to prevent errors when in Outfit Studio
         // Use priority 10 to run before other mods that might also hook this function
@@ -403,6 +399,11 @@ function BCOMOutfitStudioExit() {
         window.BCOM_OutfitStudio_WorkInProgress = [...OutfitStudioChar.Appearance];
     }
 
+    // Exit layering if active
+    if (typeof Layering !== 'undefined' && Layering.IsActive()) {
+        Layering.Exit();
+    }
+
     // Remove DOM elements
     const container = document.getElementById('outfit-studio-container');
     if (container) {
@@ -438,6 +439,7 @@ function BCOMOutfitStudioExit() {
     OutfitStudioInHelp = false;
     OutfitStudioHelpOverlay = null;
     OutfitStudioInAppearance = false;
+    OutfitStudioInLayering = false;
 
     // Check if we should return to Outfit Manager
     const previousDialogMode = window.BCOM_PreviousDialogMenuMode;
@@ -516,7 +518,8 @@ function OutfitStudioCreateActionButtons() {
         { id: 'copy-bcx', label: 'Copy BCX Code', icon: 'Icons/Export.png', action: OutfitStudioCopyBCXCode, y: 420 },
         { id: 'import-bcx', label: 'Import BCX Code', icon: 'Icons/Import.png', action: OutfitStudioImportBCXCode, y: 530 },
         { id: 'clear-all', label: 'Clear All', icon: 'Icons/Trash.png', action: OutfitStudioClearAll, y: 640 },
-        { id: 'help', label: 'Help', icon: 'Icons/Question.png', action: OutfitStudioShowHelp, y: 750 }
+        { id: 'create-new', label: 'Create New', icon: 'Icons/Reset.png', action: OutfitStudioCreateNew, y: 750 },
+        { id: 'help', label: 'Help', icon: 'Icons/Question.png', action: OutfitStudioShowHelp, y: 860 }
     ];
 
     // Create an array to store button references
@@ -647,7 +650,7 @@ function BCOMOutfitStudioRun() {
     }
 
     // Show/hide action buttons based on current mode
-    OutfitStudioShowActionButtons(!OutfitStudioInExtendedItem && !OutfitStudioInColorPicker && !OutfitStudioInHelp);
+    OutfitStudioShowActionButtons(!OutfitStudioInExtendedItem && !OutfitStudioInColorPicker && !OutfitStudioInHelp && !OutfitStudioInLayering);
 
     // Hide/show help overlay based on mode
     if (OutfitStudioHelpOverlay) {
@@ -660,6 +663,11 @@ function BCOMOutfitStudioRun() {
         if (equippedItem && typeof ItemColorDraw === 'function') {
             ItemColorDraw(OutfitStudioChar, OutfitStudioSelectedGroup.Name, 1025, 125, 950, 850, false);
         }
+    }
+
+    // Resize layering UI if active
+    if (OutfitStudioInLayering && typeof Layering !== 'undefined' && Layering.IsActive()) {
+        Layering.Resize(false);
     }
 
     // Draw extended item UI if active
@@ -735,7 +743,7 @@ function BCOMOutfitStudioRun() {
     } else {
         // Show the container when not in extended mode
         const container = document.getElementById('outfit-studio-container');
-        if (container && !OutfitStudioInColorPicker) {
+        if (container && !OutfitStudioInColorPicker && !OutfitStudioInLayering) {
             container.style.display = 'block';
         }
     }
@@ -824,6 +832,14 @@ function OutfitStudioDrawMenuBar() {
                 name: "ColorChange",
                 icon: "Icons/ColorChange.png",
                 tooltip: "Change Color",
+                color: "White"
+            });
+
+            // Layering button
+            OutfitStudioMenuButtons.push({
+                name: "Layering",
+                icon: "Icons/Layering.png",
+                tooltip: "Layering",
                 color: "White"
             });
         }
@@ -983,6 +999,11 @@ function BCOMOutfitStudioClick() {
         }
     }
 
+    // Layering is DOM-based and handles its own clicks
+    if (OutfitStudioInLayering) {
+        return;
+    }
+
     // Menu bar clicks (check first to match BC's priority)
     if (OutfitStudioHandleMenuClick()) {
         return;
@@ -1035,6 +1056,10 @@ function OutfitStudioHandleMenuClick() {
                 case "Use":
                     OutfitStudioOpenProperties();
                     return true;
+
+                case "Layering":
+                    OutfitStudioOpenLayering();
+                    return true;
             }
         }
     }
@@ -1079,6 +1104,48 @@ function OutfitStudioOpenColorPicker() {
 
             // If changes were saved, refresh the character and grid
             if (save) {
+                CharacterRefresh(OutfitStudioChar);
+                OutfitStudioSelectGroup(OutfitStudioSelectedGroup);
+            }
+        });
+    }
+}
+
+function OutfitStudioOpenLayering() {
+    if (!OutfitStudioChar || !OutfitStudioSelectedGroup) {
+        return;
+    }
+
+    const equippedItem = InventoryGet(OutfitStudioChar, OutfitStudioSelectedGroup.Name);
+    if (!equippedItem) {
+        return;
+    }
+
+    // Set flag to indicate we're in layering mode
+    OutfitStudioInLayering = true;
+
+    // Hide the entire DOM container to prevent blocking clicks
+    const container = document.getElementById('outfit-studio-container');
+    if (container) {
+        container.style.display = 'none';
+    }
+
+    // Initialize the layering UI
+    if (typeof Layering !== 'undefined' && typeof Layering.Init === 'function') {
+        Layering.Init(equippedItem, OutfitStudioChar);
+
+        // Register exit callback to restore Outfit Studio UI
+        Layering.RegisterExitCallbacks({
+            callback: () => {
+                OutfitStudioInLayering = false;
+
+                // Show the container again
+                const container = document.getElementById('outfit-studio-container');
+                if (container) {
+                    container.style.display = 'block';
+                }
+
+                // Refresh the character and grid
                 CharacterRefresh(OutfitStudioChar);
                 OutfitStudioSelectGroup(OutfitStudioSelectedGroup);
             }
@@ -1524,9 +1591,10 @@ function OutfitStudioSelectGroup(group) {
                             : true;
 
                         if (canUse) {
-                            // Check prerequisites for crafted items too
+                            // Only block on pose prerequisites — bypass item/access blocking
+                            const posePrereqs = OutfitStudioGetEnforcedPrerequisites(asset);
                             const canWear = typeof InventoryAllow === 'function'
-                                ? InventoryAllow(OutfitStudioChar, asset, asset.Prerequisite, false)
+                                ? InventoryAllow(OutfitStudioChar, asset, posePrereqs, false)
                                 : true;
 
                             items.push({ Asset: asset, Craft: crafted, Blocked: !canWear });
@@ -1544,9 +1612,10 @@ function OutfitStudioSelectGroup(group) {
     );
 
     for (const asset of groupAssets) {
-        // Check prerequisites using BC's InventoryAllow function
+        // Only block on pose prerequisites — bypass item/access blocking
+        const posePrereqs = OutfitStudioGetEnforcedPrerequisites(asset);
         const canWear = typeof InventoryAllow === 'function'
-            ? InventoryAllow(OutfitStudioChar, asset, asset.Prerequisite, false)
+            ? InventoryAllow(OutfitStudioChar, asset, posePrereqs, false)
             : true;
 
         // Check if item is permission-blocked (different from prerequisite blocking)
@@ -1563,6 +1632,30 @@ function OutfitStudioSelectGroup(group) {
 
     // Populate DOM grid
     OutfitStudioPopulateGrid(items);
+}
+
+// Filter an asset's prerequisites down to only pose-related ones.
+// Pose prerequisites follow the pattern "Can{PoseName}" where the remainder
+// after "Can" is a key in PoseRecord (e.g., CanKneel, CanHogtied, CanBaseUpper).
+// All other prerequisites (access-blocking, item conflicts, state checks) are
+// bypassed in the Outfit Studio to allow free outfit building. This is safe
+// because BC's server validation does not enforce prerequisites.
+// Prerequisites enforced in Outfit Studio - pose, body, position, and graphical reality checks
+var OutfitStudioEnforcedPrerequisites = new Set([
+    // Body/anatomy checks
+    "HasBreasts", "HasFlatChest", "HasVagina", "HasPenis",
+    // Positional/environmental
+    "OnBed", "NotSuspended", "NotLifted", "NotMounted", "NotKneeling",
+    // Display frame (requires specific body state)
+    "DisplayFrame",
+]);
+
+function OutfitStudioGetEnforcedPrerequisites(asset) {
+    if (!asset.Prerequisite || !Array.isArray(asset.Prerequisite)) return [];
+    return asset.Prerequisite.filter(p =>
+        OutfitStudioEnforcedPrerequisites.has(p)
+        || (typeof PoseRecord !== 'undefined' && p.slice(3) in PoseRecord)
+    );
 }
 
 // Helper function to check if an item is currently worn
@@ -1820,6 +1913,11 @@ function OutfitStudioApplyItem(item) {
 // ===== KEYBOARD =====
 function BCOMOutfitStudioKeyDown(event) {
     if (event.key === "Escape") {
+        // If in layering mode, exit layering instead of exiting Outfit Studio
+        if (OutfitStudioInLayering && typeof Layering !== 'undefined' && Layering.IsActive()) {
+            Layering.Exit();
+            return true;
+        }
         BCOMOutfitStudioExit();
         return true;
     }
@@ -1849,12 +1947,8 @@ function OutfitStudioSaveOutfit() {
         if (choice) {
             // User chose to overwrite
             if (window.BCOM_OutfitManager && typeof window.BCOM_OutfitManager.SaveOutfit === 'function') {
-                // SaveOutfit with a name parameter will handle the overwrite logic
-                // It will automatically detect the existing outfit and overwrite it
+                // Pass the folder from edit mode so the overwrite targets the correct folder
                 window.BCOM_OutfitManager.SaveOutfit(OutfitStudioChar, editMode.outfitName);
-
-                // Do NOT clear edit mode - the outfit is still selected and the user
-                // should remain in "editing" mode for this outfit after saving.
             } else {
                 console.error('[Outfit Studio] BCOM_OutfitManager.SaveOutfit not available!');
                 OutfitStudioClearTooltips();
@@ -1863,13 +1957,17 @@ function OutfitStudioSaveOutfit() {
         } else {
             // User chose to save as new - use normal save flow
             if (window.BCOM_OutfitManager && typeof window.BCOM_OutfitManager.SaveOutfit === 'function') {
-                // SaveOutfit will handle prompting for name, validation, folder management, etc.
-                window.BCOM_OutfitManager.SaveOutfit(OutfitStudioChar);
-                // Clear edit mode after saving as new
-                window.BCOM_OutfitStudio_EditMode = null;
-                // Also clear the checkbox state
-                if (window.BCOM_ModInitializer) {
-                    window.BCOM_ModInitializer.setState({ outfitToEdit: null });
+                const savedName = window.BCOM_OutfitManager.SaveOutfit(OutfitStudioChar);
+                // If save succeeded, transition to editing the newly saved outfit
+                if (savedName) {
+                    window.BCOM_OutfitStudio_EditMode = {
+                        outfitName: savedName,
+                        outfitData: null
+                    };
+                    // Sync the Outfit Manager checkbox
+                    if (window.BCOM_ModInitializer) {
+                        window.BCOM_ModInitializer.setState({ outfitToEdit: savedName });
+                    }
                 }
             } else {
                 console.error('[Outfit Studio] BCOM_OutfitManager.SaveOutfit not available!');
@@ -1880,8 +1978,18 @@ function OutfitStudioSaveOutfit() {
     } else {
         // Not in edit mode - use normal save flow (prompts for name)
         if (window.BCOM_OutfitManager && typeof window.BCOM_OutfitManager.SaveOutfit === 'function') {
-            // SaveOutfit will handle prompting for name, validation, folder management, etc.
-            window.BCOM_OutfitManager.SaveOutfit(OutfitStudioChar);
+            const savedName = window.BCOM_OutfitManager.SaveOutfit(OutfitStudioChar);
+            // If save succeeded, transition to editing the newly saved outfit
+            if (savedName) {
+                window.BCOM_OutfitStudio_EditMode = {
+                    outfitName: savedName,
+                    outfitData: null
+                };
+                // Sync the Outfit Manager checkbox
+                if (window.BCOM_ModInitializer) {
+                    window.BCOM_ModInitializer.setState({ outfitToEdit: savedName });
+                }
+            }
         } else {
             console.error('[Outfit Studio] BCOM_OutfitManager.SaveOutfit not available!');
             OutfitStudioClearTooltips();
@@ -2036,6 +2144,46 @@ function OutfitStudioClearAll() {
     }
 }
 
+function OutfitStudioCreateNew() {
+    if (!OutfitStudioChar) {
+        return;
+    }
+
+    // Clear tooltips before showing any dialogs
+    OutfitStudioClearTooltips();
+
+    // Confirm if currently editing an outfit
+    const editMode = window.BCOM_OutfitStudio_EditMode;
+    if (editMode && editMode.outfitName) {
+        if (!confirm(`You are currently editing '${editMode.outfitName}'.\n\nStart a new outfit from scratch?`)) {
+            return;
+        }
+    }
+
+    // Clear edit mode
+    window.BCOM_OutfitStudio_EditMode = null;
+    window.BCOM_OutfitStudio_WorkInProgress = null;
+
+    // Sync the Outfit Manager checkbox
+    if (window.BCOM_ModInitializer) {
+        window.BCOM_ModInitializer.setState({ outfitToEdit: null });
+    }
+
+    // Reset character to blank slate (Player appearance minus items)
+    OutfitStudioChar.Appearance = Player.Appearance.filter(item =>
+        !item.Asset.Group.IsItem()
+    );
+
+    // Refresh character
+    CharacterRefresh(OutfitStudioChar);
+
+    // Clear selected group and rebuild grid
+    OutfitStudioSelectedGroup = null;
+    if (OutfitStudioDOMGrid) {
+        OutfitStudioDOMGrid.innerHTML = '';
+    }
+}
+
 function OutfitStudioShowHelp() {
     // Set flag
     OutfitStudioInHelp = true;
@@ -2089,10 +2237,12 @@ function OutfitStudioShowHelp() {
 
         <h3 style="color: #666;">Vertical Buttons</h3>
         <ul>
-            <li><strong>Save Outfit:</strong> Save to Outfit Manager. This will save a new outfit to the 'Main' folder at the end of the list. Use the Folder Management button in the Outfit Manager to move the outfit to a desired folder.  If you are editing an existing outfit, you will be prompted to either overwrite the saved outfit or to save it as a new one. The Toast notification will tell you which folder it was saved to.</li>
+            <li><strong>Save Outfit:</strong> Save to Outfit Manager. This will save a new outfit to the 'Main' folder at the end of the list. Use the Folder Management button in the Outfit Manager to move the outfit to a desired folder. If you are editing an existing outfit, you will be prompted to either overwrite the saved outfit or to save it as a new one. After saving, the Studio will transition to editing the saved outfit for continued work.</li>
+            <li><strong>Change Appearance:</strong> Opens BC's appearance screen to change body features (hair, eyes, etc.) on the Studio character.</li>
             <li><strong>Copy BCX Code:</strong> Export outfit as a BCX Code for sharing. This will copy the outfit's BCX code to your clipboard.</li>
             <li><strong>Import BCX Code:</strong> Import a BCX code to the character in the Outfit Studio. You can then edit it to your liking and either save it or copy the new BCX code to your clipboard.</li>
-            <li><strong>Clear All:</strong> Remove all restraint items. Will show a prompt to confirm.</li>
+            <li><strong>Clear All:</strong> Remove all restraint items while staying in the current edit session. Will show a prompt to confirm.</li>
+            <li><strong>Create New:</strong> Abandon the current edit session and start a brand new outfit from scratch. Resets the character to a blank slate and clears the edit mode.</li>
         </ul>
     `;
 
@@ -2156,8 +2306,8 @@ function OutfitStudioHideHelp() {
     OutfitStudioInHelp = false;
     OutfitStudioHelpOverlay = null;
 
-    // Show action buttons again (unless in extended mode or color picker)
-    OutfitStudioShowActionButtons(!OutfitStudioInExtendedItem && !OutfitStudioInColorPicker);
+    // Show action buttons again (unless in extended mode, color picker, or layering)
+    OutfitStudioShowActionButtons(!OutfitStudioInExtendedItem && !OutfitStudioInColorPicker && !OutfitStudioInLayering);
 }
 
 function OutfitStudioOpenAppearance() {
