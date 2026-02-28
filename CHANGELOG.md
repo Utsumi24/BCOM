@@ -2,6 +2,13 @@
 
 Any changes made to the addon will be here for easier documentation.
 
+## [v0.8.2]
+- Allowed more creative freedom when adding items in the Outfit Studio.  It will now only restrict items based on forced poses, male/female parts, and with certain other item-based restrictions that require an item first (eg: bed items without a bed)
+- Added the layering button in the Outfit Studio
+- Saving as a new outfit in the Outfit Studio will change to editing that newly saved outfit instead of reverting it to "Creating new outfit".  The edit checkbox state will be reflected on that specific outfit when exiting back to the Outfit Manager
+- Added a "Create New" button in the Outfit Studio to start from scratch instead of clearing a work-in-progress outfit
+- Updated Outfit Studio help text to include the "Clear All" button
+
 ## [v0.8.1.1]
 - Fixed error when importing from a backup file
 
@@ -15,8 +22,6 @@ Any changes made to the addon will be here for easier documentation.
 - Outfits will now save properly and save the `Player.Appearance` so no more missing features. Any existing outfits will need to be updated. Old outfits will still work normally, but won't have all of the appearance data
 - Outfits saved from another player will respect `Player.Appearance` when saving as to not overwrite the Player's appearance when applying.  The same goes for when applying an outfit to another player
 - Added a checkbox to `Include Appearance` when loading an outfit.  This will not be available when another character is selected, only for your own character
-
-**Any outfits saved prior to `v0.8.1` wlll need to be updated (overwritten) to save appearance data!**
 
 ## [v0.8dev]
 - Converted the addon to a modular version
@@ -191,5 +196,3 @@ Any changes made to the addon will be here for easier documentation.
 - Basic outfit saving and loading functionality.
 - Added outfit manager button to character dialog.
 - Basic outfit menu interface. 
-
-
