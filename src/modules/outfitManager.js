@@ -223,7 +223,7 @@ function SaveOutfit(C, name = null) {
         const validation = InputValidator.validateName(name, 'outfit');
         if (!validation.valid) {
             ErrorHandler.showError(validation.error);
-            return;
+            return false;
         }
         outfitName = validation.sanitized;
     } else {
@@ -236,7 +236,7 @@ function SaveOutfit(C, name = null) {
 
         // Prompt with validation
         outfitName = InputValidator.promptForName("Enter outfit name:", 'outfit', existingNames);
-        if (!outfitName) return; // User cancelled or validation failed
+        if (!outfitName) return false; // User cancelled or validation failed
     }
 
     try {
@@ -257,7 +257,7 @@ function SaveOutfit(C, name = null) {
         // Check outfit limit (MAX_OUTFITS maximum)
         if (outfitStorage.outfits.length >= MAX_OUTFITS && !outfitStorage.outfits.some(o => o.name === outfitName)) {
             ShowOutfitNotification(`Maximum outfit limit (${MAX_OUTFITS}) reached. Please delete some outfits first.`);
-            return;
+            return false;
         }
 
         // First check for outfit with same name in ANY folder
@@ -272,7 +272,7 @@ function SaveOutfit(C, name = null) {
             if (existingInCurrentFolder) {
                 // Outfit exists in current folder - ask to overwrite
                 if (!confirm(`Outfit "${outfitName}" already exists in folder "${state.currentFolder}". Do you want to overwrite it?`)) {
-                    return;
+                    return false;
                 }
 
                 // Find the existing outfit index (we'll use it later)
@@ -286,7 +286,7 @@ function SaveOutfit(C, name = null) {
                 // Outfit exists in different folder(s) - prevent saving with same name
                 const otherFolders = sameNameOutfits.map(o => o.folder || "Main").join(", ");
                 alert(`An outfit named "${outfitName}" already exists in folder(s): ${otherFolders}.\nPlease choose a different name.`);
-                return;
+                return false;
             }
         }
 
@@ -338,7 +338,7 @@ function SaveOutfit(C, name = null) {
 
         if (outfitData.length === 0) {
             ErrorHandler.showError("No clothing or restraints found to save as an outfit.");
-            return;
+            return false;
         }
 
         // Create the outfit object
@@ -363,6 +363,7 @@ function SaveOutfit(C, name = null) {
 
         // Save the outfitStorage object uncompressed
         localStorage.setItem(storageKey, JSON.stringify(outfitStorage));
+        return outfitName;
 
     } catch (error) {
         ErrorHandler.showError(
@@ -370,6 +371,7 @@ function SaveOutfit(C, name = null) {
             error,
             false // Non-recoverable error
         );
+        return false;
     }
 }
 
