@@ -14,11 +14,13 @@ const _BCOM_BASE_URL = (function() {
     return src.replace(/[^/]+$/, '');
 })();
 
+const _BCOM_CACHE_BUST = '?t=' + Date.now();
+
 // Module loading utility
 function loadScript(src) {
     return new Promise((resolve, reject) => {
         const script = document.createElement('script');
-        script.src = src;
+        script.src = src + _BCOM_CACHE_BUST;
         script.onload = resolve;
         script.onerror = reject;
         document.head.appendChild(script);
