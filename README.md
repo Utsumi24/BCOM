@@ -10,6 +10,8 @@ You can open the Outfit Manager in two ways:
 ### What does this do?
 It allows you to save outfits (including restraints) to your browser's local storage and also saving outfits via BCX outfit codes.  Outfits can also be applied to other players if you click on them in chatrooms. WCE's anti-cheat will still trigger if the target player has it enabled. The Outfit Manager provides help text on the left side of the screen. You can even export your entire Outfit Manager list to be saved locally and to be imported later.
 
+You can even create outfits for use with LSCG/MBS! Convenient!
+
 ### Why use this over the game's default wardrobe system?
 You don't have to. It's merely just an alternate way of saving custom outfits. The biggest reason I made this is from hearing a bunch of people losing their wardrobe outfits and me wanting to have some kind of alternative way of saving them... and I was also affected by wardrobe loss too.
 
