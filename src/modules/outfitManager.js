@@ -1,90 +1,124 @@
 // Outfit management functionality for BC Outfit Manager
 
-// Apply padlock logic to item properties
+// All lock-related property keys (mirrors BC's ValidationAllLockProperties + Effect)
+const BCOM_LockProperties = [
+    "LockedBy", "LockMemberNumber", "LockMemberName", "LockMessage",
+    "EnableRandomInput", "RemoveItem", "ShowTimer", "CombinationNumber",
+    "Password", "Hint", "LockSet", "LockPickSeed",
+    "MemberNumberList", "RemoveTimer", "MemberNumberListKeys"
+];
+
+// Strip all lock-related properties from a Property object
+function stripLockProperties(property) {
+    if (!property) return property;
+    for (const key of BCOM_LockProperties) {
+        delete property[key];
+    }
+    // Remove "Lock" from Effect array if present
+    if (Array.isArray(property.Effect)) {
+        property.Effect = property.Effect.filter(e => e !== "Lock");
+        if (property.Effect.length === 0) delete property.Effect;
+    }
+    return property;
+}
+
+// Apply a lock to a worn item using BC's InventoryLock, then set config properties
+function applyLockToItem(C, wornItem, lockType, padlockConfigs) {
+    if (!wornItem || !lockType || lockType === "None") return;
+
+    // Use BC's InventoryLock for proper initialization
+    InventoryLock(C, wornItem, lockType, Player.MemberNumber, false);
+
+    // Set lock-specific config properties after InventoryLock has initialized
+    if (!wornItem.Property) return;
+
+    if (lockType === "CombinationPadlock") {
+        wornItem.Property.CombinationNumber = padlockConfigs.CombinationPadlock.CombinationNumber;
+    } else if (lockType === "PasswordPadlock" || lockType === "SafewordPadlock") {
+        wornItem.Property.Password = padlockConfigs[lockType].Password;
+        if (padlockConfigs[lockType].Hint) {
+            wornItem.Property.Hint = padlockConfigs[lockType].Hint;
+        }
+    } else if (lockType === "MistressTimerPadlock" || lockType === "LoversTimerPadlock") {
+        const timerConfig = padlockConfigs[lockType];
+        if (timerConfig.TimerDuration > 0) {
+            wornItem.Property.RemoveTimer = CurrentTime + timerConfig.TimerDuration;
+        }
+        if (timerConfig.RemoveItem === "random") {
+            wornItem.Property.RemoveItem = Math.random() < 0.4;
+        } else {
+            wornItem.Property.RemoveItem = timerConfig.RemoveItem;
+        }
+        wornItem.Property.EnableRandomInput = timerConfig.EnableRandomInput;
+        wornItem.Property.ShowTimer = timerConfig.ShowTimer;
+    } else if (lockType === "TimerPasswordPadlock") {
+        const config = padlockConfigs.TimerPasswordPadlock;
+        wornItem.Property.Password = config.Password;
+        if (config.Hint) {
+            wornItem.Property.Hint = config.Hint;
+        }
+        if (config.TimerDuration > 0) {
+            wornItem.Property.RemoveTimer = CurrentTime + config.TimerDuration;
+        }
+        if (config.RemoveItem === "random") {
+            wornItem.Property.RemoveItem = Math.random() < 0.4;
+        } else {
+            wornItem.Property.RemoveItem = config.RemoveItem;
+        }
+        wornItem.Property.EnableRandomInput = config.EnableRandomInput;
+        wornItem.Property.ShowTimer = config.ShowTimer;
+    }
+}
+
+// Apply padlock logic to saved item properties (used in export/copy paths)
+// For load paths, use applyLockToItem + InventoryLock instead
 function applyPadlockLogic(itemProperty, selectedPadlock, padlockConfigs) {
+    if (!itemProperty) return itemProperty;
+
     if (selectedPadlock === "None") {
-        // Remove all padlock-related properties
-        delete itemProperty.LockedBy;
-        delete itemProperty.LockMemberNumber;
-        delete itemProperty.RemoveTimer;
-        delete itemProperty.MaxTimer;
-        delete itemProperty.MemberNumberList;
-        delete itemProperty.CombinationNumber;
-        delete itemProperty.Password;
-        delete itemProperty.LockPickSeed;
-        delete itemProperty.RemoveItem;
-        delete itemProperty.Name; // DOGS mod DeviousPadlock
-        
-        // If no properties remain, set to undefined
+        stripLockProperties(itemProperty);
         if (Object.keys(itemProperty).length === 0) {
             itemProperty = undefined;
         }
     } else {
-        // Add or replace with selected padlock type
+        // Strip existing lock properties first, then write new ones
+        stripLockProperties(itemProperty);
         itemProperty.LockedBy = selectedPadlock;
-        itemProperty.LockMemberNumber = Player.MemberNumber; // Set to current player
-        
-        // Ensure Effect array includes "Lock"
-        if (!itemProperty.Effect) itemProperty.Effect = [];
-        if (!itemProperty.Effect.includes("Lock")) {
-            itemProperty.Effect.push("Lock");
-        }
-        
-        // Clear properties that don't apply to the new lock type
-        delete itemProperty.LockPickSeed;
-        delete itemProperty.Name; // DOGS mod DeviousPadlock
-        
-        // Handle special properties based on new padlock type
+        itemProperty.LockMemberNumber = Player.MemberNumber;
+
         if (selectedPadlock === "CombinationPadlock") {
-            // Use configured combination
             itemProperty.CombinationNumber = padlockConfigs.CombinationPadlock.CombinationNumber;
-            delete itemProperty.Password;
         } else if (selectedPadlock === "PasswordPadlock" || selectedPadlock === "SafewordPadlock") {
-            // Use configured password and hint
             itemProperty.Password = padlockConfigs[selectedPadlock].Password;
             if (padlockConfigs[selectedPadlock].Hint) {
                 itemProperty.Hint = padlockConfigs[selectedPadlock].Hint;
             }
-            delete itemProperty.CombinationNumber;
         } else if (selectedPadlock === "MistressTimerPadlock" || selectedPadlock === "LoversTimerPadlock") {
-            // Use configured timer settings
             const timerConfig = padlockConfigs[selectedPadlock];
             if (timerConfig.TimerDuration > 0) {
                 itemProperty.RemoveTimer = CurrentTime + timerConfig.TimerDuration;
             }
-            // Handle random RemoveItem setting
             if (timerConfig.RemoveItem === "random") {
-                itemProperty.RemoveItem = Math.random() < 0.4; // 40% chance
+                itemProperty.RemoveItem = Math.random() < 0.4;
             } else {
                 itemProperty.RemoveItem = timerConfig.RemoveItem;
             }
             itemProperty.EnableRandomInput = timerConfig.EnableRandomInput;
             itemProperty.ShowTimer = timerConfig.ShowTimer;
-            delete itemProperty.Password;
-            delete itemProperty.CombinationNumber;
         } else if (selectedPadlock === "TimerPasswordPadlock") {
-            // Use configured password, timer, and all properties
-            itemProperty.Password = padlockConfigs.TimerPasswordPadlock.Password;
-            if (padlockConfigs.TimerPasswordPadlock.Hint) {
-                itemProperty.Hint = padlockConfigs.TimerPasswordPadlock.Hint;
+            const config = padlockConfigs.TimerPasswordPadlock;
+            itemProperty.Password = config.Password;
+            if (config.Hint) itemProperty.Hint = config.Hint;
+            if (config.TimerDuration > 0) {
+                itemProperty.RemoveTimer = CurrentTime + config.TimerDuration;
             }
-            if (padlockConfigs.TimerPasswordPadlock.TimerDuration > 0) {
-                itemProperty.RemoveTimer = CurrentTime + padlockConfigs.TimerPasswordPadlock.TimerDuration;
-            }
-            // Handle random RemoveItem setting
-            if (padlockConfigs.TimerPasswordPadlock.RemoveItem === "random") {
-                itemProperty.RemoveItem = Math.random() < 0.4; // 40% chance
+            if (config.RemoveItem === "random") {
+                itemProperty.RemoveItem = Math.random() < 0.4;
             } else {
-                itemProperty.RemoveItem = padlockConfigs.TimerPasswordPadlock.RemoveItem;
+                itemProperty.RemoveItem = config.RemoveItem;
             }
-            itemProperty.EnableRandomInput = padlockConfigs.TimerPasswordPadlock.EnableRandomInput;
-            itemProperty.ShowTimer = padlockConfigs.TimerPasswordPadlock.ShowTimer;
-            delete itemProperty.CombinationNumber;
-        } else {
-            // For basic padlocks, clear special properties
-            delete itemProperty.CombinationNumber;
-            delete itemProperty.Password;
-            // Keep timing and member-related properties for compatibility
+            itemProperty.EnableRandomInput = config.EnableRandomInput;
+            itemProperty.ShowTimer = config.ShowTimer;
         }
     }
     return itemProperty;
@@ -326,7 +360,9 @@ function SaveOutfit(C, name = null) {
             itemsToSave = [...playerBodyItems, ...otherClothingItems];
         }
 
-        const outfitData = itemsToSave.map(item => ({
+        const outfitData = itemsToSave.filter(item =>
+                item.Asset && item.Asset.Name && item.Asset.Group && item.Asset.Group.Name
+            ).map(item => ({
                 Name: item.Asset.Name,
                 Group: item.Asset.Group.Name,
                 Color: Array.isArray(item.Color) ? [...item.Color] :
@@ -375,6 +411,23 @@ function SaveOutfit(C, name = null) {
     }
 }
 
+// Ensure a Craft object has all fields BC's dialog expects
+function sanitizeCraft(craft) {
+    if (!craft) return craft;
+    craft.MemberNumber = craft.MemberNumber ?? Player.MemberNumber ?? 0;
+    craft.MemberName = craft.MemberName ?? CharacterNickname(Player) ?? "";
+    craft.Private = craft.Private ?? false;
+    craft.Name = craft.Name ?? "Crafted Item";
+    craft.Description = craft.Description ?? "";
+    craft.Effects = craft.Effects ?? {};
+    craft.Lock = craft.Lock ?? "";
+    craft.Color = craft.Color ?? "Default";
+    craft.Property = craft.Property ?? null;
+    craft.ItemProperty = craft.ItemProperty ?? null;
+    craft.TypeRecord = craft.TypeRecord ?? null;
+    return craft;
+}
+
 // Load outfit function with full padlock support
 function LoadOutfit(C, outfitName) {
     try {
@@ -411,11 +464,23 @@ function LoadOutfit(C, outfitName) {
             return false;
         }
 
-        const outfitData = JSON.parse(decompressed);
-        if (!outfitData || !Array.isArray(outfitData)) {
+        const outfitDataRaw = JSON.parse(decompressed);
+        if (!outfitDataRaw || !Array.isArray(outfitDataRaw)) {
             console.error("No valid outfit data found");
             return false;
         }
+
+        // Normalize item data — handle alternate field names from older formats or imports
+        const outfitData = outfitDataRaw.map(item => {
+            if (!item || typeof item !== 'object') return item;
+            return {
+                Name: item.Name || item.name || item.AssetName || item.asset,
+                Group: item.Group || item.group || item.AssetGroup || item.Category,
+                Color: item.Color || item.color,
+                Property: item.Property || item.property,
+                Craft: item.Craft || item.craft
+            };
+        });
 
         // Use the outfit's stored isHairOnly flag or the global hairOnly setting
         const isHairOnlyOutfit = outfit.isHairOnly || state.hairOnly;
@@ -437,14 +502,19 @@ function LoadOutfit(C, outfitName) {
                     }
                 }
 
-                // Add hair items from the outfit
+                // Add hair items from the outfit via InventoryWear
+                const bondageSkill = Player.Skill.find(skill => skill.Type === "Bondage");
+                const bondageLevel = bondageSkill ? bondageSkill.Level : 0;
+
                 for (const item of outfitData) {
                     // Only process hair items
                     if (item.Group !== "HairFront" && item.Group !== "HairBack") continue;
 
                     // Validate item data
-                    if (!item || !item.Group || !item.Name) {
-                        console.warn("BCOM: Skipping invalid hair item in LoadOutfit:", item);
+                    if (!item || !item.Name) {
+                        if (item && item.Group && !item.Name) continue;
+                        console.warn("BCOM: Skipping invalid hair item in LoadOutfit (keys: " +
+                            (item ? Object.keys(item).join(", ") : "null") + "):", item);
                         continue;
                     }
 
@@ -454,7 +524,6 @@ function LoadOutfit(C, outfitName) {
                         continue;
                     }
 
-                    // Double-check asset validity
                     if (!asset.Name || !asset.Group) {
                         console.warn("BCOM: Invalid hair asset structure in LoadOutfit:", asset);
                         continue;
@@ -463,22 +532,58 @@ function LoadOutfit(C, outfitName) {
                     // Skip if the group is locked
                     if (InventoryItemHasEffect(InventoryGet(C, item.Group), "Lock")) continue;
 
-                    const bondageSkill = Player.Skill.find(skill => skill.Type === "Bondage");
-
-                    // Handle padlock replacement/removal for Hair Only mode
-                    let itemProperty = item.Property ? {...item.Property} : undefined;
-                    if (state.selectedPadlock && state.selectedPadlock !== "Keep Original" && itemProperty) {
-                        itemProperty = applyPadlockLogic(itemProperty, state.selectedPadlock, state.padlockConfigs);
+                    const craft = item.Craft ? sanitizeCraft({...item.Craft}) : null;
+                    if (craft && typeof CraftingValidate === 'function') {
+                        CraftingValidate(craft, asset, false);
                     }
+                    const wornItem = InventoryWear(
+                        C,
+                        item.Name,
+                        item.Group,
+                        item.Color || null,
+                        bondageLevel,
+                        Player.MemberNumber,
+                        craft,
+                        false
+                    );
 
-                    const newItem = {
-                        Asset: asset,
-                        Color: item.Color || "Default",
-                        Property: itemProperty,
-                        Difficulty: asset.Difficulty !== undefined ? asset.Difficulty + (bondageSkill ? bondageSkill.Level : 0) : 0
-                    };
-                    if (item.Craft) newItem.Craft = item.Craft;
-                    C.Appearance.push(newItem);
+                    if (wornItem) {
+                        const padlockSetting = state.selectedPadlock || "Keep Original";
+                        const savedLockType = item.Property?.LockedBy;
+
+                        if (padlockSetting === "None") {
+                            if (typeof ValidationDeleteLock === 'function') {
+                                ValidationDeleteLock(wornItem.Property, false);
+                            }
+                        } else if (padlockSetting !== "Keep Original") {
+                            if (typeof ValidationDeleteLock === 'function') {
+                                ValidationDeleteLock(wornItem.Property, false);
+                            }
+                            applyLockToItem(C, wornItem, padlockSetting, state.padlockConfigs);
+                        } else if (savedLockType && !wornItem.Property?.LockedBy) {
+                            InventoryLock(C, wornItem, savedLockType, item.Property.LockMemberNumber || Player.MemberNumber, false);
+                            if (item.Property.Password) wornItem.Property.Password = item.Property.Password;
+                            if (item.Property.Hint) wornItem.Property.Hint = item.Property.Hint;
+                            if (item.Property.CombinationNumber) wornItem.Property.CombinationNumber = item.Property.CombinationNumber;
+                            if (item.Property.RemoveTimer) wornItem.Property.RemoveTimer = item.Property.RemoveTimer;
+                            if (item.Property.ShowTimer != null) wornItem.Property.ShowTimer = item.Property.ShowTimer;
+                            if (item.Property.EnableRandomInput != null) wornItem.Property.EnableRandomInput = item.Property.EnableRandomInput;
+                            if (item.Property.RemoveItem != null) wornItem.Property.RemoveItem = item.Property.RemoveItem;
+                            if (item.Property.MemberNumberListKeys) wornItem.Property.MemberNumberListKeys = item.Property.MemberNumberListKeys;
+                        }
+
+                        if (item.Property) {
+                            const skipKeys = new Set([
+                                ...BCOM_LockProperties, "Effect", "Expression", "ExpressionTimer"
+                            ]);
+                            for (const [key, value] of Object.entries(item.Property)) {
+                                if (!skipKeys.has(key) && value != null) {
+                                    if (!wornItem.Property) wornItem.Property = {};
+                                    wornItem.Property[key] = value;
+                                }
+                            }
+                        }
+                    }
                 }
             }
 
@@ -520,11 +625,17 @@ function LoadOutfit(C, outfitName) {
               item.Asset.Group.Name === "HairBack")
         );
 
-        // Add new items
+        // Add new items via InventoryWear for proper BC processing
+        const bondageSkill = Player.Skill.find(skill => skill.Type === "Bondage");
+        const bondageLevel = bondageSkill ? bondageSkill.Level : 0;
+
         for (const item of outfitData) {
             // Validate item data
-            if (!item || !item.Group || !item.Name) {
-                console.warn("BCOM: Skipping invalid item in LoadOutfit:", item);
+            if (!item || !item.Name) {
+                // Items with Group but no Name are empty slots — skip silently
+                if (item && item.Group && !item.Name) continue;
+                console.warn("BCOM: Skipping invalid item in LoadOutfit (keys: " +
+                    (item ? Object.keys(item).join(", ") : "null") + "):", item);
                 continue;
             }
 
@@ -550,37 +661,79 @@ function LoadOutfit(C, outfitName) {
             // Skip non-hair items if in hair-only mode
             if (isHairOnlyOutfit && !(item.Group === "HairFront" || item.Group === "HairBack")) continue;
 
-            const bondageSkill = Player.Skill.find(skill => skill.Type === "Bondage");
-
-            // Handle padlock replacement/removal
-            let itemProperty = item.Property ? {...item.Property} : undefined;
-            if (state.selectedPadlock && state.selectedPadlock !== "Keep Original" && itemProperty) {
-                itemProperty = applyPadlockLogic(itemProperty, state.selectedPadlock, state.padlockConfigs);
-            }
-
-            const difficulty = asset.Difficulty !== undefined ? asset.Difficulty + (bondageSkill ? bondageSkill.Level : 0) : 0;
-
             // If the item is still present (AllowNone=false, survived the clearing steps),
-            // update it in place to avoid duplicate entries and rendering issues from push.
-            // Only do this when "Full Appearance" is enabled — otherwise skip body identity items.
+            // skip it unless "Full Appearance" is enabled
             const existingItem = InventoryGet(C, item.Group);
-            if (existingItem) {
-                if (!state.includeAppearance) continue;
-                existingItem.Asset = asset;
-                existingItem.Color = item.Color || "Default";
-                existingItem.Property = itemProperty;
-                existingItem.Difficulty = difficulty;
-                if (item.Craft) existingItem.Craft = item.Craft;
-                else delete existingItem.Craft;
-            } else {
-                const newItem = {
-                    Asset: asset,
-                    Color: item.Color || "Default",
-                    Property: itemProperty,
-                    Difficulty: difficulty
-                };
-                if (item.Craft) newItem.Craft = item.Craft;
-                C.Appearance.push(newItem);
+            if (existingItem && !state.includeAppearance) continue;
+
+            // Use InventoryWear for proper BC processing (ExtendedItemInit, InventoryCraft, etc.)
+            const craft = item.Craft ? sanitizeCraft({...item.Craft}) : null;
+            // Pre-validate craft data silently to auto-correct before InventoryWear logs warnings
+            if (craft && typeof CraftingValidate === 'function') {
+                CraftingValidate(craft, asset, false);
+            }
+            const wornItem = InventoryWear(
+                C,
+                item.Name,
+                item.Group,
+                item.Color || null,       // ItemColor — null lets InventoryWear use asset defaults
+                bondageLevel,              // DifficultyFactor — bondage skill level
+                Player.MemberNumber,       // MemberNumber — needed for InventoryCraft to find source
+                craft,                     // Craft — full processing via InventoryCraft
+                false                      // Refresh — defer until all items are applied
+            );
+
+            if (wornItem) {
+                // InventoryWear + InventoryCraft already handled:
+                // - ExtendedItemInit (type records, modular options)
+                // - Craft color, lock, difficulty modifiers
+                // - Expression triggers
+                // Now we only need to handle the padlock dropdown override
+                // and merge non-lock, non-craft properties from saved data.
+
+                // Determine lock handling
+                const padlockSetting = state.selectedPadlock || "Keep Original";
+                const savedLockType = item.Property?.LockedBy;
+
+                if (padlockSetting === "None") {
+                    // Strip any lock that InventoryCraft may have applied
+                    if (typeof ValidationDeleteLock === 'function') {
+                        ValidationDeleteLock(wornItem.Property, false);
+                    }
+                } else if (padlockSetting !== "Keep Original") {
+                    // Override: remove craft lock first, then apply dropdown selection
+                    if (typeof ValidationDeleteLock === 'function') {
+                        ValidationDeleteLock(wornItem.Property, false);
+                    }
+                    applyLockToItem(C, wornItem, padlockSetting, state.padlockConfigs);
+                } else if (savedLockType && !wornItem.Property?.LockedBy) {
+                    // "Keep Original" and InventoryCraft didn't already apply the lock
+                    // (craft.Lock was empty but saved Property had a lock)
+                    InventoryLock(C, wornItem, savedLockType, item.Property.LockMemberNumber || Player.MemberNumber, false);
+                    if (item.Property.Password) wornItem.Property.Password = item.Property.Password;
+                    if (item.Property.Hint) wornItem.Property.Hint = item.Property.Hint;
+                    if (item.Property.CombinationNumber) wornItem.Property.CombinationNumber = item.Property.CombinationNumber;
+                    if (item.Property.RemoveTimer) wornItem.Property.RemoveTimer = item.Property.RemoveTimer;
+                    if (item.Property.ShowTimer != null) wornItem.Property.ShowTimer = item.Property.ShowTimer;
+                    if (item.Property.EnableRandomInput != null) wornItem.Property.EnableRandomInput = item.Property.EnableRandomInput;
+                    if (item.Property.RemoveItem != null) wornItem.Property.RemoveItem = item.Property.RemoveItem;
+                    if (item.Property.MemberNumberListKeys) wornItem.Property.MemberNumberListKeys = item.Property.MemberNumberListKeys;
+                }
+                // For "Keep Original" with a craft lock: InventoryCraft already applied it — nothing to do
+
+                // Merge non-lock saved properties (OverridePriority, TypeRecord, etc.)
+                // Only skip lock properties and expression properties handled by BC
+                if (item.Property) {
+                    const skipKeys = new Set([
+                        ...BCOM_LockProperties, "Effect", "Expression", "ExpressionTimer"
+                    ]);
+                    for (const [key, value] of Object.entries(item.Property)) {
+                        if (!skipKeys.has(key) && value != null) {
+                            if (!wornItem.Property) wornItem.Property = {};
+                            wornItem.Property[key] = value;
+                        }
+                    }
+                }
             }
         }
 
@@ -834,28 +987,64 @@ function LoadOutfitFromData(C, outfitData) {
             C.Appearance.splice(A, 1);
         }
         
-        // Add new items
+        // Add new items via InventoryWear
+        const bondageSkill = Player.Skill.find(skill => skill.Type === "Bondage");
+        const bondageLevel = bondageSkill ? bondageSkill.Level : 0;
+
         for (const item of outfitData) {
             if (!item || !item.Group || !item.Name) continue;
-            
+
             const asset = AssetGet(C.AssetFamily, item.Group, item.Name);
             if (!asset) continue;
-            
+
             if (InventoryItemHasEffect(InventoryGet(C, item.Group), "Lock")) continue;
             if (asset.BodyCosplay) continue;
-            
-            const bondageSkill = Player.Skill.find(skill => skill.Type === "Bondage");
-            
-            const newItem = {
-                Asset: asset,
-                Color: item.Color || "Default",
-                Property: item.Property ? {...item.Property} : undefined,
-                Difficulty: asset.Difficulty !== undefined ? asset.Difficulty + (bondageSkill ? bondageSkill.Level : 0) : 0
-            };
-            if (item.Craft) newItem.Craft = item.Craft;
-            C.Appearance.push(newItem);
+
+            const craft = item.Craft ? sanitizeCraft({...item.Craft}) : null;
+            if (craft && typeof CraftingValidate === 'function') {
+                CraftingValidate(craft, asset, false);
+            }
+            const wornItem = InventoryWear(
+                C,
+                item.Name,
+                item.Group,
+                item.Color || null,
+                bondageLevel,
+                Player.MemberNumber,
+                craft,
+                false
+            );
+
+            if (wornItem) {
+                // Restore saved lock if InventoryCraft didn't already apply one
+                const savedLockType = item.Property?.LockedBy;
+                if (savedLockType && !wornItem.Property?.LockedBy) {
+                    InventoryLock(C, wornItem, savedLockType, item.Property.LockMemberNumber || Player.MemberNumber, false);
+                    if (item.Property.Password) wornItem.Property.Password = item.Property.Password;
+                    if (item.Property.Hint) wornItem.Property.Hint = item.Property.Hint;
+                    if (item.Property.CombinationNumber) wornItem.Property.CombinationNumber = item.Property.CombinationNumber;
+                    if (item.Property.RemoveTimer) wornItem.Property.RemoveTimer = item.Property.RemoveTimer;
+                    if (item.Property.ShowTimer != null) wornItem.Property.ShowTimer = item.Property.ShowTimer;
+                    if (item.Property.EnableRandomInput != null) wornItem.Property.EnableRandomInput = item.Property.EnableRandomInput;
+                    if (item.Property.RemoveItem != null) wornItem.Property.RemoveItem = item.Property.RemoveItem;
+                    if (item.Property.MemberNumberListKeys) wornItem.Property.MemberNumberListKeys = item.Property.MemberNumberListKeys;
+                }
+
+                // Merge non-lock, non-effect saved properties
+                if (item.Property) {
+                    const skipKeys = new Set([
+                        ...BCOM_LockProperties, "Effect", "Expression", "ExpressionTimer"
+                    ]);
+                    for (const [key, value] of Object.entries(item.Property)) {
+                        if (!skipKeys.has(key) && value != null) {
+                            if (!wornItem.Property) wornItem.Property = {};
+                            wornItem.Property[key] = value;
+                        }
+                    }
+                }
+            }
         }
-        
+
         CharacterRefresh(C);
         if (C === CurrentCharacter) {
             ChatRoomCharacterUpdate(C);
