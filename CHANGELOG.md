@@ -2,6 +2,14 @@
 
 Any changes made to the addon will be here for easier documentation.
 
+## [v0.8.3]
+- Added sanitization/validation to applying outfits that have crafted items so they don't crash the game anymore when inspecting them
+- Refactored how items are applied so crafting properties of items are properly applied
+- Fixed a crash related to a certain ECHO mod item that caused a crash when applying it
+- Removed some unnecessary console spam
+- Cleared permission restrictions on the Outfit Studio dummy character so nothing is blocked
+- Made the Outfit Studio dummy character visible at all times, even if the player is blind
+
 ## [v0.8.2]
 - Allowed more creative freedom when adding items in the Outfit Studio.  It will now only restrict items based on forced poses, male/female parts, and with certain other item-based restrictions that require an item first (eg: bed items without a bed)
 - Added the layering button in the Outfit Studio
@@ -16,7 +24,7 @@ Any changes made to the addon will be here for easier documentation.
 - Fixed item sorting in the Outfit Studio to mimic the base game better
 - Fixed it so when navigating to other body zones, it resets the scroll position to the top of the list instead of retaining its position from the previous body zone
 - Fixed subscreen navigation to properly mimic the base game's functionality when editing item properties and properly breadcumb its way back when clicking on the exit button
-- Fixed a crash related to the Tighten/Loosen subscreen
+- Fixed a crash related to the Tighten/Loosen subscreen in the Outfit Studio
 - Fixed how editing saved outfits are handled after the outfit has been overwritten.  The editing of the existing outfit will be retained until it is unchecked in the Outfit Manager
 - Fixed a crash relating to key presses while inside the Outfit Manager screen
 - Outfits will now save properly and save the `Player.Appearance` so no more missing features. Any existing outfits will need to be updated. Old outfits will still work normally, but won't have all of the appearance data

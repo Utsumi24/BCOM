@@ -223,7 +223,12 @@ function DrawOutfitMenu() {
         AllowedPose: [],
         RegisterHook: () => {},
         UnregisterHook: () => {},
-        Name: ""  // Clear the name
+        Name: "",  // Clear the name
+        // Disable expression triggers so hovering outfits doesn't change facial expressions
+        OnlineSharedSettings: {
+            ...(CurrentCharacter.OnlineSharedSettings || {}),
+            ItemsAffectExpressions: false
+        }
     };
 
     // 3. Load the bundle onto the dummy character
@@ -298,9 +303,23 @@ function DrawOutfitMenu() {
                         }
                     }
                 }
-                // Use LoadOutfit to apply the outfit to our display character
+                // Use LoadOutfit to apply the outfit to our display character.
+                // Replace CharacterRefresh temporarily to prevent addon hooks (LSCG, etc.)
+                // from processing the preview character and affecting the Player.
                 try {
-                    window.BCOM_OutfitManager.LoadOutfit(displayChar, outfit.name);
+                    const _origRefresh = CharacterRefresh;
+                    CharacterRefresh = function(C, Push, RefreshDialog) {
+                        // Full visual refresh but no push/sync and no dialog refresh
+                        // to prevent addon hooks from affecting the Player
+                        CharacterLoadEffect(C);
+                        PoseRefresh(C);
+                        CharacterLoadCanvas(C);
+                    };
+                    try {
+                        window.BCOM_OutfitManager.LoadOutfit(displayChar, outfit.name);
+                    } finally {
+                        CharacterRefresh = _origRefresh;
+                    }
                     CharacterLoadCanvas(displayChar);
                 } catch (previewError) {
                     console.warn("BCOM: Error loading outfit preview:", previewError);

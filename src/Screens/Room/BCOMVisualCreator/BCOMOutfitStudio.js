@@ -167,6 +167,12 @@ function OutfitStudioRegisterHooks() {
                 if (character !== OutfitStudioChar) {
                     return; // Don't draw this character
                 }
+                // Temporarily make dummy act like Player to bypass blindness/tint overlay
+                const originalIsPlayer = character.IsPlayer;
+                character.IsPlayer = () => true;
+                const result = next(args);
+                character.IsPlayer = originalIsPlayer;
+                return result;
             }
             return next(args);
         });
@@ -290,14 +296,27 @@ function BCOMOutfitStudioLoad() {
     OutfitStudioChar.Inventory = Player.Inventory; // Share inventory for availability checks
     OutfitStudioChar.Crafting = Player.Crafting; // Share crafting for crafted items
     OutfitStudioChar.ActivePose = Player.ActivePose || [];
-    OutfitStudioChar.PermissionItems = Player.PermissionItems || {};
-    OutfitStudioChar.LimitedItems = Player.LimitedItems || {};
-    OutfitStudioChar.BlockItems = Player.BlockItems || [];
+    // Clear permission restrictions so nothing is blocked/limited in the Studio.
+    // The dummy character isn't the Player, so BC's permission checks would
+    // incorrectly treat limited items as blocked (InventoryCheckLimitedPermission
+    // only allows limited items for Player/Owner/Lover).
+    OutfitStudioChar.PermissionItems = {};
+    OutfitStudioChar.LimitedItems = {};
+    OutfitStudioChar.BlockItems = [];
+    // Set permissive online settings so appearance/cosplay changes aren't restricted,
+    // and disable expression triggers so equipping items doesn't change facial expressions
+    // (which can bleed through to the Player via addon hooks like LSCG)
+    OutfitStudioChar.OnlineSharedSettings = {
+        AllowFullWardrobeAccess: true,
+        BlockBodyCosplay: false,
+        ItemsAffectExpressions: false
+    };
     OutfitStudioChar.LabelColor = Player.LabelColor;
     OutfitStudioChar.Ownership = Player.Ownership;
     OutfitStudioChar.Lovership = Player.Lovership || [];
     OutfitStudioChar.Difficulty = Player.Difficulty || {}; // Required for extended item system
     OutfitStudioChar.Game = Player.Game || {}; // Some extended items check this
+    OutfitStudioChar.ArousalSettings = JSON.parse(JSON.stringify(Player.ArousalSettings || {})); // Deep copy to prevent mutation of Player's arousal
 
     // Check if we're in edit mode (editing an existing outfit)
     const editMode = window.BCOM_OutfitStudio_EditMode;
@@ -1863,22 +1882,22 @@ function OutfitStudioApplyItem(item) {
                 OutfitStudioChar,
                 item.Asset.Name,
                 OutfitStudioSelectedGroup.Name,
-                null,          // ItemColor
-                null,          // Difficulty
-                null,          // MemberNumber
-                item.Craft,    // Craft
-                true           // Refresh - let BC handle it properly
+                null,                    // ItemColor - let Craft.Color handle it
+                null,                    // Difficulty
+                Player.MemberNumber,     // MemberNumber - needed for InventoryCraft to find Source
+                item.Craft,              // Craft
+                true                     // Refresh
             );
         } else {
             InventoryWear(
                 OutfitStudioChar,
                 item.Asset.Name,
                 OutfitStudioSelectedGroup.Name,
-                null,          // ItemColor
-                null,          // Difficulty
-                null,          // MemberNumber
-                null,          // Craft
-                true           // Refresh - let BC handle it properly
+                null,                    // ItemColor
+                null,                    // Difficulty
+                Player.MemberNumber,     // MemberNumber
+                null,                    // Craft
+                true                     // Refresh
             );
         }
     }
