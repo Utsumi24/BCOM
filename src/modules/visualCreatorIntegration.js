@@ -82,16 +82,8 @@ function BCOMLaunchVisualCreatorDirect(modApi = null) {
         }
     }
 
-    // Save current screen functions (including optional handlers)
-    window.BCOM_PreviousScreenFunctions = {
-        Load: CurrentScreenFunctions.Load,
-        Run: CurrentScreenFunctions.Run,
-        Click: CurrentScreenFunctions.Click,
-        Exit: CurrentScreenFunctions.Exit,
-        MouseMove: CurrentScreenFunctions.MouseMove || null,
-        KeyDown: CurrentScreenFunctions.KeyDown || null,
-        Resize: CurrentScreenFunctions.Resize || null
-    };
+    // Save current screen functions (all handlers BC expects)
+    window.BCOM_PreviousScreenFunctions = { ...CurrentScreenFunctions };
 
     // Store modApi for the Visual Creator to use
     if (modApi) {
@@ -125,10 +117,20 @@ function BCOMLaunchVisualCreatorDirect(modApi = null) {
     // Immediately take over the screen to prevent BC from drawing the base screen
     CurrentScreen = "BCOMOutfitStudio";
     CurrentScreenFunctions = {
-        Load: BCOMOutfitStudioLoad,
-        Run: BCOMOutfitStudioRun,
-        Click: BCOMOutfitStudioClick,
-        Exit: BCOMOutfitStudioExit
+        Run: (time) => BCOMOutfitStudioRun(time),
+        Click: (e) => BCOMOutfitStudioClick(e),
+        Draw: () => {},
+        Load: async () => BCOMOutfitStudioLoad(),
+        Unload: () => {},
+        Resize: (load) => {},
+        MouseDown: () => {},
+        MouseUp: () => {},
+        MouseMove: () => {},
+        MouseWheel: () => {},
+        KeyDown: (e) => BCOMOutfitStudioKeyDown(e),
+        KeyUp: () => false,
+        Exit: () => BCOMOutfitStudioExit(),
+        Paste: () => {},
     };
 
     // Small delay to ensure dialog cleanup completes before initializing
