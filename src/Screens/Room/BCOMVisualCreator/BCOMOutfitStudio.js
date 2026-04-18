@@ -486,17 +486,9 @@ function BCOMOutfitStudioExit() {
         CurrentModule = previousModule;
         CurrentCharacter = previousCharacter;
 
-        // Restore screen functions
+        // Restore screen functions (all handlers BC expects)
         if (previousScreenFunctions) {
-            CurrentScreenFunctions = {
-                Load: previousScreenFunctions.Load,
-                Run: previousScreenFunctions.Run,
-                Click: previousScreenFunctions.Click,
-                Exit: previousScreenFunctions.Exit,
-                MouseMove: previousScreenFunctions.MouseMove || null,
-                KeyDown: previousScreenFunctions.KeyDown || null,
-                Resize: previousScreenFunctions.Resize || null
-            };
+            CurrentScreenFunctions = { ...previousScreenFunctions };
         } else {
             console.error('[Outfit Studio] ERROR: No previousScreenFunctions to restore!');
         }
