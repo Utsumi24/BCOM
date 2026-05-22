@@ -2370,10 +2370,20 @@ function OutfitStudioOpenAppearance() {
             CurrentScreen = "BCOMOutfitStudio";
             CurrentModule = "Room";
             CurrentScreenFunctions = {
-                Load: BCOMOutfitStudioLoad,
-                Run: BCOMOutfitStudioRun,
-                Click: BCOMOutfitStudioClick,
-                Exit: BCOMOutfitStudioExit
+                Run: (time) => BCOMOutfitStudioRun(time),
+                Click: (e) => BCOMOutfitStudioClick(e),
+                Draw: () => {},
+                Load: async () => BCOMOutfitStudioLoad(),
+                Unload: () => {},
+                Resize: (load) => {},
+                MouseDown: () => {},
+                MouseUp: () => {},
+                MouseMove: () => {},
+                MouseWheel: () => {},
+                KeyDown: (e) => BCOMOutfitStudioKeyDown(e),
+                KeyUp: () => false,
+                Exit: () => BCOMOutfitStudioExit(),
+                Paste: () => {},
             };
         });
     } else {
