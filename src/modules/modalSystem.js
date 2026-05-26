@@ -1052,13 +1052,306 @@ function createTimerPasswordModal(padlockType, currentConfig = {}) {
     });
 }
 
+// Appearance Options modal — per-outfit slot exclusion (X marks). Outfits apply
+// "exactly as saved" by default; the X excludes that slot from the apply (keeps
+// the player's current item there). Saving the checked outfit as a new variant
+// bakes the exclusions in, producing a filtered copy.
+//
+// Visual key:
+//   default row — slot included; yellow background if the outfit has an item there,
+//                 light grey if the slot is only currently occupied on the player
+//   X row (red) — excluded from this outfit's apply/save
+//
+// Slots are filtered to the union of (groups in the outfit) and (groups currently
+// on the player) — empty-on-both slots are hidden to declutter the list.
+function createAppearanceOptionsModal(character, outfitName, outfitData) {
+    return new Promise((resolve) => {
+        const mi = window.BCOM_ModInitializer;
+        if (!outfitName) {
+            console.warn("BCOM: createAppearanceOptionsModal called with no outfitName");
+            resolve(false);
+            return;
+        }
+
+        // Working copy of this outfit's exclusion set. Committed on Done.
+        const excluded = new Set(mi.getOutfitExclusions(outfitName));
+
+        // Group name -> item description for the saved outfit.
+        const outfitMap = {};
+        if (Array.isArray(outfitData)) {
+            for (const item of outfitData) {
+                if (!item || !item.Group || !item.Name) continue;
+                const asset = (typeof AssetGet === 'function')
+                    ? AssetGet(character?.AssetFamily || "Female3DCG", item.Group, item.Name)
+                    : null;
+                const desc = item.Craft?.Name || asset?.Description || item.Name;
+                outfitMap[item.Group] = desc;
+            }
+        }
+
+        // Group name -> current item description on the character.
+        const playerMap = {};
+        const appearance = (character && Array.isArray(character.Appearance)) ? character.Appearance : [];
+        for (const item of appearance) {
+            const group = item?.Asset?.Group;
+            if (!group || group.Category !== "Appearance") continue;
+            const desc = item.Craft?.Name || item.Asset.Description || item.Asset.Name;
+            playerMap[group.Name] = desc;
+        }
+
+        // Build the slot list: appearance groups where the outfit OR the player has
+        // an item. Each slot is bucketed into a section derived from its AssetGroup
+        // flags. Sections are ordered like the base-game wardrobe: clothing → cosplay
+        // → hair → body. Within a section, slots are alphabetical by description.
+        const slotNames = new Set([
+            ...Object.keys(outfitMap).filter(n => {
+                const g = (typeof AssetGroup !== 'undefined' ? AssetGroup : []).find(gg => gg.Name === n);
+                return g && g.Category === "Appearance";
+            }),
+            ...Object.keys(playerMap)
+        ]);
+        const sectionOf = (g, name) => {
+            if (g?.Clothing) return "clothing";
+            if (g?.BodyCosplay) return "cosplay";
+            if (name.startsWith("Hair") || name === "Beard") return "hair";
+            return "body";
+        };
+        const slots = Array.from(slotNames).map(name => {
+            const g = (typeof AssetGroup !== 'undefined' ? AssetGroup : []).find(gg => gg.Name === name);
+            return {
+                name,
+                description: g?.Description || name,
+                section: sectionOf(g, name)
+            };
+        });
+
+        // Section definitions in display order. Empty sections are skipped at render.
+        const SECTION_ORDER = [
+            { key: "clothing", label: "Clothing" },
+            { key: "cosplay", label: "Cosplay" },
+            { key: "hair", label: "Hair" },
+            { key: "body", label: "Body" }
+        ];
+        const sectionSlots = {};
+        for (const def of SECTION_ORDER) {
+            sectionSlots[def.key] = slots
+                .filter(s => s.section === def.key)
+                .sort((a, b) => a.description.localeCompare(b.description));
+        }
+
+        const overlay = document.createElement('div');
+        overlay.style.cssText = `
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            display: flex; justify-content: center; align-items: center;
+            z-index: 10000;
+        `;
+
+        const modal = document.createElement('div');
+        modal.style.cssText = `
+            background: white; padding: 20px; border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            max-width: 600px; width: 90%; max-height: 85vh;
+            display: flex; flex-direction: column;
+            font-family: Arial, sans-serif;
+        `;
+
+        const escapeAttr = (s) => String(s).replace(/"/g, '&quot;').replace(/</g, '&lt;');
+
+        // A toggled (excluded) slot is always "left alone" on apply — but the meaning
+        // reads differently depending on whether the outfit fills it:
+        //   • outfit has an item (yellow) → toggle = ✕ Exclude (skip the outfit's item,
+        //     keep what you're wearing).
+        //   • only you have an item (grey) → toggle = ✓ Keep (preserve your current item
+        //     instead of letting the outfit clear it).
+        // Both write to the same exclusion set; only the glyph/color/wording differ.
+        const styleFor = (hasOutfitItem, isExcluded) => {
+            if (isExcluded) {
+                return hasOutfitItem
+                    ? { bg: '#ffcdd2', border: '#c62828', mark: '✕', markColor: '#c62828' }
+                    : { bg: '#c8e6c9', border: '#2e7d32', mark: '✓', markColor: '#2e7d32' };
+            }
+            return {
+                bg: hasOutfitItem ? '#fff9c4' : '#eceff1',
+                border: hasOutfitItem ? '#fbc02d' : '#cfd8dc',
+                mark: '',
+                markColor: '#999'
+            };
+        };
+
+        const renderRow = (slot) => {
+            const outfitItem = outfitMap[slot.name];
+            const playerItem = playerMap[slot.name];
+            const isExcluded = excluded.has(slot.name);
+            const hasOutfitItem = !!outfitItem;
+            const s = styleFor(hasOutfitItem, isExcluded);
+
+            const tipParts = [];
+            if (outfitItem) tipParts.push(`Outfit: ${outfitItem}`);
+            if (playerItem) tipParts.push(`Currently: ${playerItem}`);
+            if (!tipParts.length) tipParts.push("Empty");
+            if (isExcluded) {
+                tipParts.push("Will keep your current item on apply");
+            } else if (hasOutfitItem) {
+                tipParts.push("Click to skip this slot and keep your current item");
+            } else {
+                tipParts.push("Click to keep your current item (otherwise it's removed)");
+            }
+
+            return `
+                <div class="aopt-row" data-group="${escapeAttr(slot.name)}"
+                    data-has-outfit="${hasOutfitItem ? '1' : '0'}"
+                    title="${escapeAttr(tipParts.join('\n'))}"
+                    style="
+                        display: flex; align-items: center; gap: 10px;
+                        padding: 6px 10px; margin: 2px 0; border-radius: 4px;
+                        cursor: pointer; user-select: none;
+                        background: ${s.bg};
+                        border: 1px solid ${s.border};
+                    ">
+                    <span class="aopt-mark" style="
+                        display: inline-block; width: 18px; height: 18px;
+                        border: 2px solid #555; border-radius: 3px;
+                        background: white; text-align: center;
+                        font-weight: bold; font-size: 14px; line-height: 16px;
+                        color: ${s.markColor};
+                    ">${s.mark}</span>
+                    <span style="flex: 1; color: #333; font-size: 14px;">${escapeAttr(slot.description)}</span>
+                    <span style="color: #555; font-size: 12px; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                        ${escapeAttr(outfitItem || playerItem || '')}
+                    </span>
+                </div>
+            `;
+        };
+
+        const rowsHTML = SECTION_ORDER.map(def => {
+            const list = sectionSlots[def.key];
+            if (!list.length) return '';
+            return `
+                <div class="aopt-section">
+                    <div class="aopt-section-header" data-section="${def.key}" style="
+                        display: flex; align-items: center; gap: 8px;
+                        padding: 6px 8px; margin: 4px 0 2px 0; border-radius: 4px;
+                        cursor: pointer; user-select: none;
+                        background: #e3e7ea; border: 1px solid #cfd8dc;
+                        font-weight: bold; font-size: 13px; color: #37474f;
+                    ">
+                        <span class="aopt-caret" style="display:inline-block; width:12px;">▼</span>
+                        <span style="flex:1;">${escapeAttr(def.label)}</span>
+                        <span style="color:#78909c; font-weight:normal;">${list.length}</span>
+                    </div>
+                    <div class="aopt-section-body" data-section-body="${def.key}">
+                        ${list.map(renderRow).join('')}
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+        const heading = `Appearance Options — ${escapeAttr(outfitName)}`;
+        modal.innerHTML = `
+            <h3 style="margin: 0 0 6px 0; color: #333;">${heading}</h3>
+            <p style="color: #666; margin: 0 0 10px 0; font-size: 13px;">
+                Outfits apply exactly as saved. Click a slot to change how it's handled:
+                <br><span style="color: #c9a300;">Yellow</span> = outfit fills this slot →
+                click for <span style="color: #c62828;">✕ Exclude</span> (skip it, keep what you're wearing).
+                <br><span style="color: #607d8b;">Grey</span> = only you have an item here →
+                click for <span style="color: #2e7d32;">✓ Keep</span> (otherwise it's removed on apply).
+            </p>
+            <div id="aoptList" style="
+                flex: 1; overflow-y: auto;
+                border: 1px solid #ddd; border-radius: 4px;
+                padding: 4px; background: #fafafa;
+                min-height: 200px; max-height: 55vh;
+            ">${rowsHTML || '<div style="padding:12px;color:#888;font-size:13px;">No appearance slots to configure for this outfit.</div>'}</div>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 12px;">
+                <button id="aoptClear" style="
+                    padding: 8px 14px; background: #f0f0f0;
+                    border: 1px solid #ccc; border-radius: 4px;
+                    cursor: pointer; font-size: 13px;
+                ">Clear All</button>
+                <div>
+                    <button id="aoptCancel" style="
+                        padding: 8px 14px; margin-right: 8px;
+                        background: #f0f0f0; border: 1px solid #ccc; border-radius: 4px;
+                        cursor: pointer; font-size: 13px;
+                    ">Cancel</button>
+                    <button id="aoptDone" style="
+                        padding: 8px 14px; background: #007bff; color: white;
+                        border: 1px solid #007bff; border-radius: 4px;
+                        cursor: pointer; font-size: 13px;
+                    ">Done</button>
+                </div>
+            </div>
+        `;
+
+        overlay.appendChild(modal);
+        document.body.appendChild(overlay);
+
+        const list = modal.querySelector('#aoptList');
+        const clearBtn = modal.querySelector('#aoptClear');
+        const cancelBtn = modal.querySelector('#aoptCancel');
+        const doneBtn = modal.querySelector('#aoptDone');
+
+        function repaintRow(row) {
+            const group = row.dataset.group;
+            const hasOutfitItem = row.dataset.hasOutfit === '1';
+            const isExcluded = excluded.has(group);
+            const s = styleFor(hasOutfitItem, isExcluded);
+            row.style.background = s.bg;
+            row.style.borderColor = s.border;
+            const mark = row.querySelector('.aopt-mark');
+            mark.textContent = s.mark;
+            mark.style.color = s.markColor;
+        }
+
+        list.addEventListener('click', (e) => {
+            // Section header toggles collapse/expand of its body.
+            const header = e.target.closest('.aopt-section-header');
+            if (header) {
+                const key = header.dataset.section;
+                const body = list.querySelector(`[data-section-body="${key}"]`);
+                const caret = header.querySelector('.aopt-caret');
+                if (body) {
+                    const collapsed = body.style.display === 'none';
+                    body.style.display = collapsed ? '' : 'none';
+                    if (caret) caret.textContent = collapsed ? '▼' : '▶';
+                }
+                return;
+            }
+
+            const row = e.target.closest('.aopt-row');
+            if (!row) return;
+            const group = row.dataset.group;
+            if (excluded.has(group)) excluded.delete(group);
+            else excluded.add(group);
+            repaintRow(row);
+        });
+
+        clearBtn.addEventListener('click', () => {
+            excluded.clear();
+            list.querySelectorAll('.aopt-row').forEach(repaintRow);
+        });
+
+        function close(commit) {
+            if (commit) mi.setOutfitExclusions(outfitName, excluded);
+            document.body.removeChild(overlay);
+            resolve(commit);
+        }
+
+        doneBtn.addEventListener('click', () => close(true));
+        cancelBtn.addEventListener('click', () => close(false));
+        overlay.addEventListener('click', (e) => { if (e.target === overlay) close(false); });
+    });
+}
+
 // Export for module system
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = {
         createInputModal,
         createTimerModal,
         createPasswordModal,
-        createTimerPasswordModal
+        createTimerPasswordModal,
+        createAppearanceOptionsModal
     };
 }
 
@@ -1067,5 +1360,6 @@ window.BCOM_ModalSystem = {
     createInputModal,
     createTimerModal,
     createPasswordModal,
-    createTimerPasswordModal
+    createTimerPasswordModal,
+    createAppearanceOptionsModal
 };

@@ -20,9 +20,11 @@ UI_CONSTANTS.OUTFIT_BUTTON_X = UI_CONSTANTS.EXISTING_BUTTON_X - UI_CONSTANTS.BUT
 // State variables
 let PreviousDialogMode = "items";
 let isSortMode = false;
-let applyHairWithOutfit = false;
-let hairOnly = false;
-let includeAppearance = false;
+// Per-outfit Appearance Options exclusions. Keyed by outfit name → Set of group names the
+// user wants OMITTED when that outfit is applied or saved as a new variant. Outfits apply
+// "exactly as saved" by default; the set carves out exceptions (X marks in the modal).
+// Cleared on successful apply for that outfit; otherwise persists for the session.
+let outfitExclusions = new Map();
 let selectedPadlock = window.selectedPadlock || "Keep Original";
 let DialogOutfitPage = 0;
 let isExportMode = false;
@@ -114,8 +116,6 @@ function getState() {
     return {
         PreviousDialogMode,
         isSortMode,
-        applyHairWithOutfit,
-        hairOnly,
         selectedPadlock,
         DialogOutfitPage,
         isExportMode,
@@ -125,8 +125,40 @@ function getState() {
         allowMultipleSelect,
         padlockConfigs,
         outfitToEdit,
-        includeAppearance
+        outfitExclusions
     };
+}
+
+// Per-outfit exclusion helpers. The Map keys are outfit names; values are Sets of
+// excluded group names (X'd in the Appearance Options modal).
+function getOutfitExclusions(outfitName) {
+    if (!outfitName) return new Set();
+    let set = outfitExclusions.get(outfitName);
+    if (!set) {
+        set = new Set();
+        outfitExclusions.set(outfitName, set);
+    }
+    return set;
+}
+function setOutfitExclusions(outfitName, excludedGroups) {
+    if (!outfitName) return;
+    const set = excludedGroups instanceof Set
+        ? new Set(excludedGroups)
+        : new Set(excludedGroups || []);
+    if (set.size === 0) outfitExclusions.delete(outfitName);
+    else outfitExclusions.set(outfitName, set);
+}
+function clearOutfitExclusions(outfitName) {
+    if (!outfitName) return;
+    outfitExclusions.delete(outfitName);
+}
+function hasOutfitExclusions(outfitName) {
+    const set = outfitExclusions.get(outfitName);
+    return !!(set && set.size > 0);
+}
+function getOutfitExclusionCount(outfitName) {
+    const set = outfitExclusions.get(outfitName);
+    return set ? set.size : 0;
 }
 
 // Setters for state variables
@@ -134,8 +166,6 @@ function setState(newState) {
     // Update the actual module variables
     if ('PreviousDialogMode' in newState) PreviousDialogMode = newState.PreviousDialogMode;
     if ('isSortMode' in newState) isSortMode = newState.isSortMode;
-    if ('applyHairWithOutfit' in newState) applyHairWithOutfit = newState.applyHairWithOutfit;
-    if ('hairOnly' in newState) hairOnly = newState.hairOnly;
     if ('selectedPadlock' in newState) selectedPadlock = newState.selectedPadlock;
     if ('DialogOutfitPage' in newState) DialogOutfitPage = newState.DialogOutfitPage;
     if ('isExportMode' in newState) isExportMode = newState.isExportMode;
@@ -145,7 +175,11 @@ function setState(newState) {
     if ('allowMultipleSelect' in newState) allowMultipleSelect = newState.allowMultipleSelect;
     if ('padlockConfigs' in newState) padlockConfigs = newState.padlockConfigs;
     if ('outfitToEdit' in newState) outfitToEdit = newState.outfitToEdit;
-    if ('includeAppearance' in newState) includeAppearance = newState.includeAppearance;
+    if ('outfitExclusions' in newState) {
+        outfitExclusions = newState.outfitExclusions instanceof Map
+            ? newState.outfitExclusions
+            : new Map();
+    }
 }
 
 // Export for module system
@@ -154,6 +188,11 @@ if (typeof module !== 'undefined' && module.exports) {
         initMod,
         getState,
         setState,
+        getOutfitExclusions,
+        setOutfitExclusions,
+        clearOutfitExclusions,
+        hasOutfitExclusions,
+        getOutfitExclusionCount,
         OUTFIT_PRIORITIES,
         UI_CONSTANTS
     };
@@ -164,6 +203,11 @@ window.BCOM_ModInitializer = {
     initMod,
     getState,
     setState,
+    getOutfitExclusions,
+    setOutfitExclusions,
+    clearOutfitExclusions,
+    hasOutfitExclusions,
+    getOutfitExclusionCount,
     OUTFIT_PRIORITIES,
     UI_CONSTANTS
 };
