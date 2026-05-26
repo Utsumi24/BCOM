@@ -269,7 +269,12 @@ function SaveOutfit(C, name = null) {
             JSON.parse(storageData).outfits?.map(o => o.name) || [] : [];
 
         // Prompt with validation
-        outfitName = InputValidator.promptForName("Enter outfit name:", 'outfit', existingNames);
+        // Variant save mode (outfit checked) → prompt mentions the source outfit so
+        // the user knows they're creating a filtered copy, not capturing current look.
+        const promptLabel = state.outfitToEdit
+            ? `Enter name for filtered copy of "${state.outfitToEdit}":`
+            : "Enter outfit name:";
+        outfitName = InputValidator.promptForName(promptLabel, 'outfit', existingNames);
         if (!outfitName) return false; // User cancelled or validation failed
     }
 
@@ -324,77 +329,107 @@ function SaveOutfit(C, name = null) {
             }
         }
 
-        // Convert appearance to BCX format outfit data.
-        // When saving own character: capture all appearance/item groups.
-        // When saving another player: use Player's body features (non-clothing Appearance items)
-        // as the identity base, then layer the other character's clothing and restraints on top.
-        // This preserves the player's own identity (eyes, skin, hair, etc.) while capturing
-        // the outfit items from the other character.
-        const isOwnCharacter = C === Player ||
-            (typeof C.IsPlayer === 'function' && C.IsPlayer()) ||
-            C.MemberNumber === Player.MemberNumber;
+        // Two save paths:
+        //   1. Filtered-copy mode — an outfit is checked (state.outfitToEdit) AND its
+        //      stored data exists. Save a copy of that outfit's saved data with the
+        //      user's X'd slots omitted, as a new named variant. Bakes the exclusions
+        //      in permanently for the new outfit. The source outfit and its exclusion
+        //      Set are untouched.
+        //   2. Normal mode — no outfit checked. Capture the character's current
+        //      appearance, with anti-impersonation logic for non-own characters.
+        let outfitData;
+        // Variant-save mode only triggers when the user clicks the Save button with
+        // an outfit checked (state.outfitToEdit). Imports pass an explicit `name`
+        // argument and should never enter this branch.
+        const variantSaveEnabled = !name && !!state.outfitToEdit;
+        const sourceOutfit = variantSaveEnabled
+            ? outfitStorage.outfits.find(o => o.name === state.outfitToEdit)
+            : null;
+        const sourceExclusions = sourceOutfit
+            ? window.BCOM_ModInitializer.getOutfitExclusions(sourceOutfit.name)
+            : new Set();
 
-        let itemsToSave;
-        if (isOwnCharacter) {
-            // Save everything for own character — including required body features
-            // (eyes, skin, mouth, etc.) so the player can fully revert their appearance.
-            itemsToSave = C.Appearance.filter(item => {
-                const group = item?.Asset?.Group;
-                return group && (group.Category === "Appearance" || group.Category === "Item");
-            });
-        } else {
-            // Player's optional body features (AllowNone=true, non-clothing: hair, tattoos, markings)
-            // Excludes required body identity items (AllowNone=false: eyes, skin, mouth, etc.)
-            const playerBodyItems = Player.Appearance.filter(item => {
-                const group = item?.Asset?.Group;
-                return group && group.Category === "Appearance" && !group.Clothing && group.AllowNone;
-            });
-            // Other character's clothing and restraints only
-            const otherClothingItems = C.Appearance.filter(item => {
-                const group = item?.Asset?.Group;
-                return group && (
-                    (group.Category === "Appearance" && group.Clothing) ||
-                    group.Category === "Item"
+        if (sourceOutfit && sourceOutfit.data) {
+            try {
+                const decompressed = LZString.decompressFromBase64(sourceOutfit.data);
+                const sourceItems = decompressed ? JSON.parse(decompressed) : [];
+                if (!Array.isArray(sourceItems)) {
+                    ErrorHandler.showError("Source outfit data is invalid.");
+                    return false;
+                }
+                outfitData = sourceItems.filter(item =>
+                    item && item.Group && item.Name && !sourceExclusions.has(item.Group)
                 );
-            });
-            itemsToSave = [...playerBodyItems, ...otherClothingItems];
-        }
+            } catch (decompressErr) {
+                ErrorHandler.showError("Failed to read source outfit for variant save.", decompressErr);
+                return false;
+            }
+        } else {
+            const isOwnCharacter = C === Player ||
+                (typeof C.IsPlayer === 'function' && C.IsPlayer()) ||
+                C.MemberNumber === Player.MemberNumber;
 
-        const outfitData = itemsToSave.filter(item =>
-                item.Asset && item.Asset.Name && item.Asset.Group && item.Asset.Group.Name
-            ).map(item => ({
-                Name: item.Asset.Name,
-                Group: item.Asset.Group.Name,
-                Color: Array.isArray(item.Color) ? [...item.Color] :
-                       (typeof item.Color === "string" && item.Color !== "" &&
-                        item.Color.toLowerCase() !== "default") ? item.Color : undefined,
-                Property: item.Property ? {...item.Property} : undefined,
-                Craft: item.Craft ? {...item.Craft} : undefined
-            }));
+            let itemsToSave;
+            if (isOwnCharacter) {
+                itemsToSave = C.Appearance.filter(item => {
+                    const group = item?.Asset?.Group;
+                    return group && (group.Category === "Appearance" || group.Category === "Item");
+                });
+            } else {
+                // Anti-impersonation: use Player's body features, layer other character's
+                // clothing/restraints on top. Never store another character's body.
+                const playerBodyItems = Player.Appearance.filter(item => {
+                    const group = item?.Asset?.Group;
+                    return group && group.Category === "Appearance" && !group.Clothing;
+                });
+                const otherClothingItems = C.Appearance.filter(item => {
+                    const group = item?.Asset?.Group;
+                    return group && (
+                        (group.Category === "Appearance" && group.Clothing) ||
+                        group.Category === "Item"
+                    );
+                });
+                itemsToSave = [...playerBodyItems, ...otherClothingItems];
+            }
+
+            outfitData = itemsToSave.filter(item =>
+                    item.Asset && item.Asset.Name && item.Asset.Group && item.Asset.Group.Name
+                ).map(item => ({
+                    Name: item.Asset.Name,
+                    Group: item.Asset.Group.Name,
+                    Color: Array.isArray(item.Color) ? [...item.Color] :
+                           (typeof item.Color === "string" && item.Color !== "" &&
+                            item.Color.toLowerCase() !== "default") ? item.Color : undefined,
+                    Property: item.Property ? {...item.Property} : undefined,
+                    Craft: item.Craft ? {...item.Craft} : undefined
+                }));
+        }
 
         if (outfitData.length === 0) {
             ErrorHandler.showError("No clothing or restraints found to save as an outfit.");
             return false;
         }
 
-        // Create the outfit object
+        // Create the outfit object. Saves always capture everything — per-slot
+        // replacement is a load-time decision via Appearance Options.
         const newOutfit = {
             name: outfitName,
             folder: state.currentFolder,
-            isHairOnly: state.hairOnly,
             data: LZString.compressToBase64(JSON.stringify(outfitData))
         };
 
         // If overwriting, replace at same index; otherwise add to end
         if (overwriteIndex >= 0) {
             outfitStorage.outfits[overwriteIndex] = newOutfit;
-            const hairOnlyIndicator = newOutfit.isHairOnly ? " [Hair]" : "";
-            ShowOutfitNotification(`Outfit "${outfitName}${hairOnlyIndicator}" has been overwritten`);
+            ShowOutfitNotification(`Outfit "${outfitName}" has been overwritten`);
         } else {
-            // Add the outfit with the current folder
             outfitStorage.outfits.push(newOutfit);
-            const hairOnlyIndicator = newOutfit.isHairOnly ? " [Hair]" : "";
-            ShowOutfitNotification(`Outfit "${outfitName}${hairOnlyIndicator}" has been saved to folder "${state.currentFolder}"`);
+            const variantSuffix = sourceOutfit
+                ? ` (filtered copy of "${sourceOutfit.name}")`
+                : "";
+            ShowOutfitNotification(
+                `Outfit "${outfitName}" has been saved to folder "${state.currentFolder}"${variantSuffix}`
+            );
         }
 
         // Save the outfitStorage object uncompressed
@@ -482,148 +517,65 @@ function LoadOutfit(C, outfitName) {
             };
         });
 
-        // Use the outfit's stored isHairOnly flag or the global hairOnly setting
-        const isHairOnlyOutfit = outfit.isHairOnly || state.hairOnly;
+        // New replacement policy: outfits apply "exactly as saved" — every slot in the
+        // outfit data overwrites the corresponding slot on the character, unless the
+        // user has X'd that slot in the Appearance Options modal for this specific
+        // outfit. The exclusion Set is per-outfit (keyed by outfit.name) and persists
+        // across the session until the outfit is actually applied (not just hovered).
+        //
+        // Exclusions only take effect while this outfit is the checked one
+        // (state.outfitToEdit). Unchecking deactivates them but leaves them in the Map,
+        // so re-checking the outfit restores the user's edits for the rest of the session.
+        const exclusionsActive = state.outfitToEdit === outfit.name;
+        const exclusions = exclusionsActive
+            ? window.BCOM_ModInitializer.getOutfitExclusions(outfit.name)
+            : new Set();
+        // Legacy outfits saved with isHairOnly used to imply "hair only" — keep that
+        // intent by excluding everything except the hair groups when applying.
+        let hairOnlyApply = false;
+        if (outfit.isHairOnly) hairOnlyApply = true;
 
-        // Special handling for Hair Only mode - only replace hair items, keep everything else
-        if (isHairOnlyOutfit) {
-            // Check if outfit has any hair items
-            const hasHairItems = outfitData.some(item =>
-                item.Group === "HairFront" || item.Group === "HairBack"
-            );
-
-            // Only remove existing hair if we have hair items to replace them with
-            if (hasHairItems) {
-                for (let A = C.Appearance.length - 1; A >= 0; A--) {
-                    const item = C.Appearance[A];
-                    if ((item.Asset.Group.Name === "HairFront" || item.Asset.Group.Name === "HairBack") &&
-                        !InventoryItemHasEffect(InventoryGet(C, item.Asset.Group.Name), "Lock")) {
-                        C.Appearance.splice(A, 1);
-                    }
-                }
-
-                // Add hair items from the outfit via InventoryWear
-                const bondageSkill = Player.Skill.find(skill => skill.Type === "Bondage");
-                const bondageLevel = bondageSkill ? bondageSkill.Level : 0;
-
-                for (const item of outfitData) {
-                    // Only process hair items
-                    if (item.Group !== "HairFront" && item.Group !== "HairBack") continue;
-
-                    // Validate item data
-                    if (!item || !item.Name) {
-                        if (item && item.Group && !item.Name) continue;
-                        console.warn("BCOM: Skipping invalid hair item in LoadOutfit (keys: " +
-                            (item ? Object.keys(item).join(", ") : "null") + "):", item);
-                        continue;
-                    }
-
-                    const asset = AssetGet(C.AssetFamily, item.Group, item.Name);
-                    if (!asset) {
-                        console.warn(`BCOM: Hair asset not found in LoadOutfit: ${item.Group}/${item.Name}`);
-                        continue;
-                    }
-
-                    if (!asset.Name || !asset.Group) {
-                        console.warn("BCOM: Invalid hair asset structure in LoadOutfit:", asset);
-                        continue;
-                    }
-
-                    // Skip if the group is locked
-                    if (InventoryItemHasEffect(InventoryGet(C, item.Group), "Lock")) continue;
-
-                    const craft = item.Craft ? sanitizeCraft({...item.Craft}) : null;
-                    if (craft && typeof CraftingValidate === 'function') {
-                        CraftingValidate(craft, asset, false);
-                    }
-                    const wornItem = InventoryWear(
-                        C,
-                        item.Name,
-                        item.Group,
-                        item.Color || null,
-                        bondageLevel,
-                        Player.MemberNumber,
-                        craft,
-                        false
-                    );
-
-                    if (wornItem) {
-                        const padlockSetting = state.selectedPadlock || "Keep Original";
-                        const savedLockType = item.Property?.LockedBy;
-
-                        if (padlockSetting === "None") {
-                            if (typeof ValidationDeleteLock === 'function') {
-                                ValidationDeleteLock(wornItem.Property, false);
-                            }
-                        } else if (padlockSetting !== "Keep Original") {
-                            if (typeof ValidationDeleteLock === 'function') {
-                                ValidationDeleteLock(wornItem.Property, false);
-                            }
-                            applyLockToItem(C, wornItem, padlockSetting, state.padlockConfigs);
-                        } else if (savedLockType && !wornItem.Property?.LockedBy) {
-                            InventoryLock(C, wornItem, savedLockType, item.Property.LockMemberNumber || Player.MemberNumber, false);
-                            if (item.Property.Password) wornItem.Property.Password = item.Property.Password;
-                            if (item.Property.Hint) wornItem.Property.Hint = item.Property.Hint;
-                            if (item.Property.CombinationNumber) wornItem.Property.CombinationNumber = item.Property.CombinationNumber;
-                            if (item.Property.RemoveTimer) wornItem.Property.RemoveTimer = item.Property.RemoveTimer;
-                            if (item.Property.ShowTimer != null) wornItem.Property.ShowTimer = item.Property.ShowTimer;
-                            if (item.Property.EnableRandomInput != null) wornItem.Property.EnableRandomInput = item.Property.EnableRandomInput;
-                            if (item.Property.RemoveItem != null) wornItem.Property.RemoveItem = item.Property.RemoveItem;
-                            if (item.Property.MemberNumberListKeys) wornItem.Property.MemberNumberListKeys = item.Property.MemberNumberListKeys;
-                        }
-
-                        if (item.Property) {
-                            const skipKeys = new Set([
-                                ...BCOM_LockProperties, "Effect", "Expression", "ExpressionTimer"
-                            ]);
-                            for (const [key, value] of Object.entries(item.Property)) {
-                                if (!skipKeys.has(key) && value != null) {
-                                    if (!wornItem.Property) wornItem.Property = {};
-                                    wornItem.Property[key] = value;
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
-            CharacterRefresh(C);
-            if (C === CurrentCharacter) {
-                ChatRoomCharacterUpdate(C);
-            }
+        const shouldApplyGroup = (name) => {
+            if (!name) return false;
+            if (exclusions.has(name)) return false;
+            if (hairOnlyApply && name !== "HairFront" && name !== "HairBack") return false;
             return true;
-        }
+        };
 
-        // Clear existing items, but keep cosplay items
-        for (let A = C.Appearance.length - 1; A >= 0; A--) {
-            const item = C.Appearance[A];
-            // Keep cosplay items and items that can't be removed
-            if (!item.Asset.Group.AllowNone ||
-                item.Asset.Group.Category !== "Appearance" ||
-                item.Asset.BodyCosplay) {
-                continue;
+        // Slots this apply will overwrite. Two contributors:
+        //   1. Every Group present in outfit data (replaces matching slot on player).
+        //   2. Every Clothing slot the player currently wears (cleared so the result
+        //      matches the saved outfit — clothing slots the outfit doesn't fill go empty).
+        // Restraint (Item) slots are only touched where the outfit has data, so unrelated
+        // restraints the player is wearing aren't removed.
+        // Body (Appearance non-Clothing) slots also only get touched where the outfit
+        // has data; body slots require a value, so we don't blank them.
+        // Excluded / locked slots are filtered out further down.
+        const groupsBeingApplied = new Set();
+        for (const item of outfitData) {
+            if (item && item.Group && shouldApplyGroup(item.Group)) {
+                groupsBeingApplied.add(item.Group);
             }
-            C.Appearance.splice(A, 1);
+        }
+        for (const item of C.Appearance) {
+            const group = item?.Asset?.Group;
+            if (!group || !group.Name) continue;
+            const isClothing = group.Category === "Appearance" && group.Clothing;
+            if (!isClothing) continue;
+            if (!shouldApplyGroup(group.Name)) continue;
+            groupsBeingApplied.add(group.Name);
         }
 
-        // Remove existing items except locked and blocked body cosplay
-        const groupsToReplace = new Set(outfitData.map(item => item.Group));
-        C.Appearance = C.Appearance.filter(item =>
-            // Keep items that aren't in the outfit
-            !groupsToReplace.has(item.Asset.Group.Name) ||
-            // Keep locked items
-            InventoryItemHasEffect(InventoryGet(C, item.Asset.Group.Name), "Lock") ||
-            // Keep all body cosplay items
-            item.Asset.BodyCosplay ||
-            // Keep hair if applyHairWithOutfit is false
-            (!state.applyHairWithOutfit && (item.Asset.Group.Name === "HairFront" || item.Asset.Group.Name === "HairBack")) ||
-            // Keep items outside the saveable categories (not clothing, item groups, body markings, or hair)
-            !(item.Asset.Group.Clothing ||
-              item.Asset.Group.Name.includes("Item") ||
-              item.Asset.Group.Name.includes("BodyMarkings") ||
-              item.Asset.Group.Name === "HairFront" ||
-              item.Asset.Group.Name === "HairBack")
-        );
+        // Clear existing items in slots about to be replaced, except locked items.
+        // Cosplay items follow the per-slot rule: if their slot is flagged, they're
+        // replaced; if not, the slot isn't in groupsBeingApplied so they stay.
+        C.Appearance = C.Appearance.filter(item => {
+            const groupName = item?.Asset?.Group?.Name;
+            if (!groupName) return true;
+            if (!groupsBeingApplied.has(groupName)) return true;
+            if (InventoryItemHasEffect(InventoryGet(C, groupName), "Lock")) return true;
+            return false;
+        });
 
         // Add new items via InventoryWear for proper BC processing
         const bondageSkill = Player.Skill.find(skill => skill.Type === "Bondage");
@@ -639,6 +591,9 @@ function LoadOutfit(C, outfitName) {
                 continue;
             }
 
+            // Per-outfit exclusion: skip slots the user X'd for this outfit.
+            if (!shouldApplyGroup(item.Group)) continue;
+
             const asset = AssetGet(C.AssetFamily, item.Group, item.Name);
             if (!asset) {
                 console.warn(`BCOM: Asset not found in LoadOutfit: ${item.Group}/${item.Name}`);
@@ -651,20 +606,9 @@ function LoadOutfit(C, outfitName) {
                 continue;
             }
 
-            // Skip if the group is locked or if it's a cosplay item
+            // Skip if the group is locked. Cosplay items now follow the per-slot policy:
+            // if shouldReplaceGroup returned true for this slot, the user opted in.
             if (InventoryItemHasEffect(InventoryGet(C, item.Group), "Lock")) continue;
-            if (asset.BodyCosplay) continue; // Always skip cosplay items from outfits
-
-            // Skip hair items if applyHairWithOutfit is false
-            if (!state.applyHairWithOutfit && (item.Group === "HairFront" || item.Group === "HairBack")) continue;
-
-            // Skip non-hair items if in hair-only mode
-            if (isHairOnlyOutfit && !(item.Group === "HairFront" || item.Group === "HairBack")) continue;
-
-            // If the item is still present (AllowNone=false, survived the clearing steps),
-            // skip it unless "Full Appearance" is enabled
-            const existingItem = InventoryGet(C, item.Group);
-            if (existingItem && !state.includeAppearance) continue;
 
             // Use InventoryWear for proper BC processing (ExtendedItemInit, InventoryCraft, etc.)
             const craft = item.Craft ? sanitizeCraft({...item.Craft}) : null;
@@ -741,6 +685,8 @@ function LoadOutfit(C, outfitName) {
         if (C === CurrentCharacter) {
             ChatRoomCharacterUpdate(C);
         }
+        // Note: the per-outfit exclusion entry is cleared in the click handler that
+        // *applies* the outfit, not here — otherwise hover preview would wipe choices.
         return true;
 
     } catch (error) {
@@ -749,21 +695,17 @@ function LoadOutfit(C, outfitName) {
     }
 }
 
-// Get BCX code for a character's current outfit
-function getCurrentOutfitBCXCode(C, includeHair = null, forceHairOnly = false, padlockOption = null) {
+// Get BCX code for a character's current outfit. Exported outfits always capture the
+// full appearance — per-slot replacement is decided on apply, not export, so recipients
+// can configure their own Appearance Options.
+function getCurrentOutfitBCXCode(C, padlockOption = null) {
     try {
         const state = window.BCOM_ModInitializer.getState();
-        
-        // Use the passed parameter if provided, otherwise use the global setting
-        const shouldIncludeHair = includeHair !== null ? includeHair : state.applyHairWithOutfit;
-        
-        // Use the passed forceHairOnly parameter if provided, otherwise use the global setting
-        const isHairOnly = forceHairOnly !== false ? forceHairOnly : state.hairOnly;
-        
-        // Use the passed padlockOption parameter if provided, otherwise use the global setting
+
         const padlockSetting = padlockOption !== null ? padlockOption : state.selectedPadlock;
         
         // Same identity-preserving logic as SaveOutfit: use Player's body for other characters
+        // to prevent BCOM from being an easy identity-copy tool for impersonating other players.
         const isOwnCharacter = C === Player ||
             (typeof C.IsPlayer === 'function' && C.IsPlayer()) ||
             C.MemberNumber === Player.MemberNumber;
@@ -772,10 +714,11 @@ function getCurrentOutfitBCXCode(C, includeHair = null, forceHairOnly = false, p
         if (isOwnCharacter) {
             itemsToProcess = C.Appearance;
         } else {
-            // Player's optional body features only (AllowNone=true excludes eyes, skin, etc.)
+            // Player's full appearance/body — anti-impersonation: never use the other
+            // character's body. Per-slot Appearance Options decide what actually applies.
             const playerBodyItems = Player.Appearance.filter(item => {
                 const group = item?.Asset?.Group;
-                return group && group.Category === "Appearance" && !group.Clothing && group.AllowNone;
+                return group && group.Category === "Appearance" && !group.Clothing;
             });
             const otherClothingItems = C.Appearance.filter(item => {
                 const group = item?.Asset?.Group;
@@ -791,20 +734,9 @@ function getCurrentOutfitBCXCode(C, includeHair = null, forceHairOnly = false, p
             .filter(item => {
                 const group = item?.Asset?.Group;
                 if (!group) return false;
-
-                // If in hair-only mode, ONLY include hair items
-                if (isHairOnly) {
-                    return group.Name === "HairFront" || group.Name === "HairBack";
-                }
-
-                // Skip hair if shouldIncludeHair is false
-                if (!shouldIncludeHair && (group.Name === "HairFront" || group.Name === "HairBack")) {
-                    return false;
-                }
-
-                if (group.Category === "Item") return true;
-                if (group.Category !== "Appearance") return false;
-                return group.Clothing || group.AllowNone;
+                // Capture restraints, clothing, and all body/hair/markings/etc.
+                // Per-slot replacement is decided on apply, not at export time.
+                return group.Category === "Item" || group.Category === "Appearance";
             })
             .map(item => {
                 // Handle padlock replacement/removal
@@ -883,20 +815,10 @@ function ImportBCXOutfit() {
 
         const outfitData = validation.data;
 
-        // Detect if it's a hair-only outfit
-        const isHairOnlyOutfit = outfitData.length > 0 && outfitData.every(item =>
-            item.Group === "HairFront" || item.Group === "HairBack"
-        );
-
         // Get outfit name
         let outfitName;
         do {
-            // Include [Hair] indicator in prompt if it's hair-only
-            const promptText = isHairOnlyOutfit
-                ? "Enter name for imported hair outfit (will be saved as Hair Only):"
-                : "Enter name for imported outfit:";
-
-            outfitName = prompt(promptText);
+            outfitName = prompt("Enter name for imported outfit:");
             if (outfitName === null) { // User clicked Cancel
                 importElement.value = "";
                 return;
@@ -946,18 +868,9 @@ function ImportBCXOutfit() {
             // Continue with import even if canvas loading fails
         }
 
-        // Temporarily set hairOnly flag if this is a hair-only outfit
-        const state = window.BCOM_ModInitializer.getState();
-        const originalHairOnly = state.hairOnly;
-        if (isHairOnlyOutfit) {
-            window.BCOM_ModInitializer.setState({ hairOnly: true });
-        }
-
-        // Save the outfit using the existing SaveOutfit function
+        // Save the outfit using the existing SaveOutfit function. Outfits now always
+        // capture full data; per-slot decisions happen at load time.
         SaveOutfit(tempChar, outfitName);
-
-        // Restore original hairOnly value
-        window.BCOM_ModInitializer.setState({ hairOnly: originalHairOnly });
 
         // Clear the import field
         importElement.value = "";
@@ -971,22 +884,35 @@ function ImportBCXOutfit() {
     }
 }
 
-// Load outfit from raw data (used by import)
+// Load outfit from raw data (used by import). Applies every slot present in the
+// data — there's no named outfit to attach per-outfit Appearance Options to here.
 function LoadOutfitFromData(C, outfitData) {
     try {
-        const state = window.BCOM_ModInitializer.getState();
-        
-        // Clear existing items (similar to LoadOutfit logic)
-        for (let A = C.Appearance.length - 1; A >= 0; A--) {
-            const item = C.Appearance[A];
-            if (!item.Asset.Group.AllowNone ||
-                item.Asset.Group.Category !== "Appearance" ||
-                item.Asset.BodyCosplay) {
-                continue;
+        const groupsBeingApplied = new Set();
+        for (const item of outfitData) {
+            if (item && item.Group) {
+                groupsBeingApplied.add(item.Group);
             }
-            C.Appearance.splice(A, 1);
         }
-        
+        // Also clear all of the player's clothing slots so the result matches the
+        // imported outfit; restraint and body slots only get touched where the import
+        // has data, so unrelated restraints aren't removed.
+        for (const item of C.Appearance) {
+            const group = item?.Asset?.Group;
+            if (!group || !group.Name) continue;
+            const isClothing = group.Category === "Appearance" && group.Clothing;
+            if (!isClothing) continue;
+            groupsBeingApplied.add(group.Name);
+        }
+
+        C.Appearance = C.Appearance.filter(item => {
+            const groupName = item?.Asset?.Group?.Name;
+            if (!groupName) return true;
+            if (!groupsBeingApplied.has(groupName)) return true;
+            if (InventoryItemHasEffect(InventoryGet(C, groupName), "Lock")) return true;
+            return false;
+        });
+
         // Add new items via InventoryWear
         const bondageSkill = Player.Skill.find(skill => skill.Type === "Bondage");
         const bondageLevel = bondageSkill ? bondageSkill.Level : 0;
@@ -998,7 +924,6 @@ function LoadOutfitFromData(C, outfitData) {
             if (!asset) continue;
 
             if (InventoryItemHasEffect(InventoryGet(C, item.Group), "Lock")) continue;
-            if (asset.BodyCosplay) continue;
 
             const craft = item.Craft ? sanitizeCraft({...item.Craft}) : null;
             if (craft && typeof CraftingValidate === 'function') {
@@ -1049,14 +974,14 @@ function LoadOutfitFromData(C, outfitData) {
         if (C === CurrentCharacter) {
             ChatRoomCharacterUpdate(C);
         }
-        
+
         // Clear the import field
         if (document.getElementById("OutfitManagerImport")) {
             document.getElementById("OutfitManagerImport").value = "";
         }
-        
         return true;
-        
+
+
     } catch (error) {
         console.error("BCOM: Failed to load outfit from data:", error);
         return false;
@@ -1089,7 +1014,7 @@ function ExportOutfit(outfitName) {
         }
     } else {
         // Export current outfit
-        return getCurrentOutfitBCXCode(CurrentCharacter, state.applyHairWithOutfit, state.hairOnly, state.selectedPadlock);
+        return getCurrentOutfitBCXCode(CurrentCharacter, state.selectedPadlock);
     }
 }
 

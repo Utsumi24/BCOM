@@ -5,22 +5,20 @@ const DEFAULT_HELP_TEXT = [
     "Outfit Manager Help:",
     "",
     `• Up to ${getUIConstants().MAX_OUTFITS || 80} outfits can be saved`,
-    "• Left click an outfit to wear it",
+    "• Left click an outfit to wear it exactly as saved",
     "• Use the 'Rename' button (✎) to rename an outfit",
     "• Use the 'Delete' button (🗑️) to remove an outfit",
-    "• The 'Save' button stores current appearance as",
-    "  a new outfit",
-    "• Saving with an existing name will prompt",
-    "  you to overwrite the outfit",
-    "• Use the 'Import' button to import an outfit",
-    "  from BCX codes",
-    "• Toggle the 'Apply Hair' checkbox to include",
-    "  hairstyles when applying an outfit",
-    "• The ✂️ icon denotes a hair-only outfit",
-    "• Check the 'Hair Only' box to only save",
-    "  hairstyles as an outfit. Checking this box",
-    "  will only apply hairstyles if an outfit",
-    "  contains other clothing or restraints",
+    "• Use the 'Import' button to import a BCX code",
+    "• Tick an outfit's checkbox to select it for",
+    "  Outfit Studio editing AND for Appearance Options.",
+    "• Open 'Appearance Options' to ✕ exclude slots",
+    "  (tail, hair, etc.) from the ticked outfit —",
+    "  excluded slots are skipped on apply.",
+    "• Each outfit keeps its own exclusions during",
+    "  the session; applying clears that outfit's set.",
+    "• Save (with a checkbox ticked) creates a new",
+    "  filtered copy of that outfit. With no checkbox,",
+    "  Save captures your current appearance.",
     "• Use the 'Padlocks' dropdown to change",
     "  the padlock for the chosen outfit"
 ];
@@ -39,8 +37,8 @@ const EXPORT_MODE_HELP_TEXT = [
     "",
     "• Use the text field to copy/share your current outfit",
     "• Click 📋 next to individual outfits to copy them",
-    "• The 'Apply Hair' and 'Hair Only' checkboxes affect",
-    "  what gets included in the export",
+    "• Exported codes always contain the full outfit",
+    "  (clothing, restraints, body, hair, etc.)",
     "• The 'Padlocks' dropdown changes locks in exports",
     "• Click 'Done' to exit export mode"
 ];
@@ -88,7 +86,7 @@ function DrawOutfitMenu() {
 
     // If in export mode, fill with current outfit and disable editing
     if (state.isExportMode) {
-        const currentOutfitCode = getCurrentOutfitBCXCode(CurrentCharacter, state.applyHairWithOutfit, state.hairOnly, state.selectedPadlock);
+        const currentOutfitCode = getCurrentOutfitBCXCode(CurrentCharacter, state.selectedPadlock);
         if (importElement) {
             importElement.value = currentOutfitCode;
             importElement.readOnly = true;
@@ -127,32 +125,35 @@ function DrawOutfitMenu() {
     DrawButton(1885, 115, 90, 90, "", "White", "Icons/Save.png", "Backup all outfits to a file");
     DrawButton(1885, 215, 90, 90, "", "White", "Icons/Download.png", "Import outfits from backup file");
 
-    // Hair checkbox - shifted down to make room for Visual Creator button
-    DrawTextFit("Apply Hair?", 1868, 425, 120, "White", "Black");
-    DrawButton(1810, 447, 30, 30, "", "White");
-    if (state.applyHairWithOutfit) {
-        DrawImageResize("Icons/Checked.png", 1815, 452, 20, 20);
-    }
-
-    // Hair-only button - shifted down
-    DrawTextFit("Hair Only", 1868, 505, 120, "White", "Black");
-    DrawButton(1810, 519, 30, 30, "", "White");
-    if (state.hairOnly) {
-        DrawImageResize("Icons/Checked.png", 1815, 522, 20, 20);
-    }
-
-    // Full Appearance checkbox - only shown when viewing own character
+    // Appearance Options button — opens the per-outfit exclusion modal for the
+    // outfit whose checkbox is ticked (state.outfitToEdit). When no outfit is
+    // checked, the button is greyed out as a hint that the modal is per-outfit.
+    // Hidden for non-own characters since exclusions only affect the player's body.
     const isOwnCharacter = CurrentCharacter === Player ||
         CurrentCharacter.MemberNumber === Player.MemberNumber;
     if (isOwnCharacter) {
-        DrawTextFit("Full Appearance", 1868, 577, 120, "White", "Black");
-        DrawButton(1810, 591, 30, 30, "", "White");
-        if (state.includeAppearance) {
-            DrawImageResize("Icons/Checked.png", 1815, 596, 20, 20);
+        const checkedOutfit = state.outfitToEdit;
+        const exclusionCount = checkedOutfit
+            ? window.BCOM_ModInitializer.getOutfitExclusionCount(checkedOutfit)
+            : 0;
+        let label, color, tip;
+        if (!checkedOutfit) {
+            label = "Appearance Options";
+            color = "#cccccc";
+            tip = "Tick an outfit's checkbox first, then exclude any slots you want to keep as-is";
+        } else if (exclusionCount > 0) {
+            label = `Appearance (${exclusionCount})`;
+            color = "#ffcdd2";
+            tip = `${exclusionCount} slot(s) excluded from "${checkedOutfit}"`;
+        } else {
+            label = "Appearance Options";
+            color = "White";
+            tip = `Configure which slots of "${checkedOutfit}" to exclude on apply`;
         }
-        // Padlock Replacement dropdown - shifted down to make room for Full Appearance checkbox
-        DrawTextFit("Padlocks:", 1868, 647, 120, "White", "Black");
-        drawPadlockDropdown(647);
+        DrawButton(1810, 437, 180, 50, label, color, "", tip);
+        // Padlock Replacement dropdown — shifted down to leave room for button
+        DrawTextFit("Padlocks:", 1868, 577, 120, "White", "Black");
+        drawPadlockDropdown(577);
     } else {
         // Padlock Replacement dropdown - original position
         DrawTextFit("Padlocks:", 1868, 577, 120, "White", "Black");
@@ -283,7 +284,7 @@ function DrawOutfitMenu() {
             isHoveringAnyOutfit = true;
             try {
                 // Only check for locked items in default mode and when hair only mode is not enabled
-                if (!state.isSortMode && !state.isExportMode && !state.isFolderManagementMode && !state.hairOnly && outfit?.data) {
+                if (!state.isSortMode && !state.isExportMode && !state.isFolderManagementMode && outfit?.data) {
                     const outfitData = window.BCOM_Storage.getCachedOutfitData(outfit);
                     if (outfitData && Array.isArray(outfitData)) {
                         // Show locked items in help text
@@ -503,27 +504,9 @@ function DrawOutfitMenu() {
     MainCanvas.textAlign = "center";
 }
 
-// Draw UI controls (checkboxes, dropdowns)
+// Legacy helper kept for backward compatibility — current draw path lives inline above.
 function drawUIControls() {
-    const state = window.BCOM_ModInitializer.getState();
-    
-    // Hair checkbox - positioned outside the main window
-    DrawTextFit("Apply Hair?", 1868, 345, 120, "White", "Black");
-    DrawButton(1810, 367, 30, 30, "", "White");
-    if (state.applyHairWithOutfit) {
-        DrawImageResize("Icons/Checked.png", 1815, 372, 20, 20);
-    }
-
-    // Hair-only button
-    DrawTextFit("Hair Only", 1868, 425, 120, "White", "Black");
-    DrawButton(1810, 439, 30, 30, "", "White");
-    if (state.hairOnly) {
-        DrawImageResize("Icons/Checked.png", 1815, 442, 20, 20);
-    }
-
-    // Padlock Replacement dropdown
     DrawTextFit("Padlocks:", 1868, 497, 120, "White", "Black");
-    
     drawPadlockDropdown();
 }
 
@@ -645,7 +628,7 @@ function drawPadlockDropdown(labelY = 577) {
                     if (state.isExportMode) {
                         const importElement = document.getElementById("OutfitManagerImport");
                         if (importElement) {
-                            importElement.value = getCurrentOutfitBCXCode(CurrentCharacter, state.applyHairWithOutfit, state.hairOnly, newPadlock);
+                            importElement.value = getCurrentOutfitBCXCode(CurrentCharacter, newPadlock);
                         }
                     }
                 }
@@ -851,8 +834,8 @@ function truncateFolderName(folderName, maxLength) {
 }
 
 // Use outfit manager functions
-function getCurrentOutfitBCXCode(character, applyHair, hairOnly, padlock) {
-    return window.BCOM_OutfitManager.getCurrentOutfitBCXCode(character, applyHair, hairOnly, padlock);
+function getCurrentOutfitBCXCode(character, padlock) {
+    return window.BCOM_OutfitManager.getCurrentOutfitBCXCode(character, padlock);
 }
 
 async function configurePadlockProperties(padlockType) {
@@ -1085,14 +1068,12 @@ function registerHooks(modApi) {
                     const state = window.BCOM_ModInitializer.getState();
                     window.BCOM_ModInitializer.setState({ PreviousDialogMode: DialogMenuMode });
 
-                    // Reset outfit manager state
+                    // Reset outfit manager state — leave per-outfit exclusions alone so the
+                    // user's selections survive opening/closing the manager from chat.
                     window.BCOM_ModInitializer.setState({
                         isSortMode: false,
                         isExportMode: false,
                         isFolderManagementMode: false,
-                        hairOnly: false,
-                        applyHairWithOutfit: false,
-                        includeAppearance: false,
                         selectedPadlock: window.selectedPadlock || "Keep Original",
                         selectedOutfits: []
                     });

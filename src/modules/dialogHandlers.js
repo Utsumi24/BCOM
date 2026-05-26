@@ -33,8 +33,7 @@ function registerDialogHooks(modApi) {
             let isSortMode = state.isSortMode;
             let isExportMode = state.isExportMode;
             let isFolderManagementMode = state.isFolderManagementMode;
-            let hairOnly = state.hairOnly;
-            let applyHairWithOutfit = state.applyHairWithOutfit;
+            // outfitExclusions is a Map keyed by outfit name — no local alias needed.
             let selectedPadlock = state.selectedPadlock;
             let selectedOutfits = state.selectedOutfits;
             let allowMultipleSelect = state.allowMultipleSelect;
@@ -148,43 +147,37 @@ function registerDialogHooks(modApi) {
                 return;
             }
 
-            // Hair checkbox - updated coordinates to match shifted position
-            if (MouseIn(1810, 447, 30, 30)) {
-                applyHairWithOutfit = !applyHairWithOutfit;
-                if (applyHairWithOutfit) {
-                    hairOnly = false;
-                }
-                if (isExportMode) {
-                    const importElement = document.getElementById("OutfitManagerImport");
-                    if (importElement) {
-                        importElement.value = window.BCOM_OutfitManager.getCurrentOutfitBCXCode(CurrentCharacter, true, hairOnly, selectedPadlock);
-                    }
-                }
-                window.BCOM_ModInitializer.setState({ applyHairWithOutfit, hairOnly });
-                return;
-            }
-
-            // Hair-only button - updated coordinates to match shifted position
-            if (MouseIn(1810, 519, 30, 30)) {
-                hairOnly = !hairOnly;
-                if (hairOnly) {
-                    applyHairWithOutfit = false;
-                }
-                if (isExportMode) {
-                    const importElement = document.getElementById("OutfitManagerImport");
-                    if (importElement) {
-                        importElement.value = window.BCOM_OutfitManager.getCurrentOutfitBCXCode(CurrentCharacter, true, hairOnly, selectedPadlock);
-                    }
-                }
-                window.BCOM_ModInitializer.setState({ hairOnly, applyHairWithOutfit });
-                return;
-            }
-
-            // Full Appearance checkbox - only when viewing own character
+            // Appearance Options button — opens per-outfit X-exclusion modal for the
+            // currently-checked outfit (state.outfitToEdit). Disabled when no outfit
+            // is checked. Hidden entirely for non-own characters.
             const isOwnCharacter = CurrentCharacter === Player ||
                 CurrentCharacter.MemberNumber === Player.MemberNumber;
-            if (isOwnCharacter && MouseIn(1810, 591, 30, 30)) {
-                window.BCOM_ModInitializer.setState({ includeAppearance: !state.includeAppearance });
+            if (isOwnCharacter && MouseIn(1810, 437, 180, 50)) {
+                if (!state.outfitToEdit) {
+                    ShowOutfitNotification("Tick an outfit's checkbox first to configure its Appearance Options");
+                    return;
+                }
+                // Load the checked outfit's data, then open the modal.
+                const memberNumber = Player.MemberNumber;
+                const storageKey = `${window.BCOM_Base.STORAGE_PREFIX}${memberNumber}`;
+                const storageData = localStorage.getItem(storageKey);
+                let outfitItems = [];
+                if (storageData) {
+                    try {
+                        const outfitStorage = JSON.parse(storageData);
+                        const target = outfitStorage.outfits.find(o => o.name === state.outfitToEdit);
+                        if (target && target.data) {
+                            const decompressed = LZString.decompressFromBase64(target.data);
+                            const parsed = decompressed ? JSON.parse(decompressed) : null;
+                            if (Array.isArray(parsed)) outfitItems = parsed;
+                        }
+                    } catch (err) {
+                        console.warn("BCOM: Failed to load outfit data for Appearance Options:", err);
+                    }
+                }
+                window.BCOM_ModalSystem.createAppearanceOptionsModal(
+                    CurrentCharacter, state.outfitToEdit, outfitItems
+                );
                 return;
             }
 
@@ -205,18 +198,16 @@ function registerDialogHooks(modApi) {
 
             // Exit button with matching coordinates
             if (MouseIn(1885, 15, 90, 90)) {
-                // Reset all outfit manager modes before exiting
+                // Reset modes before exiting — but preserve per-outfit exclusions and the
+                // selected padlock so the user's selections survive accidental/forced
+                // exits. Exclusions reset on a successful apply; the padlock stays until
+                // the user changes it back to "Keep Original" themselves.
                 window.BCOM_ModInitializer.setState({
                     isSortMode: false,
                     isExportMode: false,
                     isFolderManagementMode: false,
-                    hairOnly: false,
-                    applyHairWithOutfit: false,
-                    includeAppearance: false,
-                    selectedPadlock: "Keep Original",
                     selectedOutfits: []
                 });
-                window.selectedPadlock = "Keep Original";
 
                 window.BCOM_Utils.toggleDialogElements(false);
 
@@ -608,19 +599,11 @@ function registerDialogHooks(modApi) {
                                 return;
                             }
 
+                            // Export filter: include everything saved in the outfit.
+                            // Per-slot replacement choices are decided on apply, not export —
+                            // the exported code is the full outfit so it's portable to other
+                            // users who can configure their own Appearance Options.
                             let filteredOutfitData = [...parsedOutfitData];
-
-                            if (!applyHairWithOutfit) {
-                                filteredOutfitData = filteredOutfitData.filter(item => 
-                                    item.Group !== "HairFront" && item.Group !== "HairBack"
-                                );
-                            }
-
-                            if (hairOnly) {
-                                filteredOutfitData = filteredOutfitData.filter(item => 
-                                    item.Group === "HairFront" || item.Group === "HairBack"
-                                );
-                            }
 
                             // Apply padlock filtering - EXACT ORIGINAL LOGIC
                             if (selectedPadlock && selectedPadlock !== "Keep Original") {
@@ -814,6 +797,14 @@ function registerDialogHooks(modApi) {
                         }
 
                         if (window.BCOM_OutfitManager.LoadOutfit(CurrentCharacter, outfit.name)) {
+                            // If this was the outfit being configured, commit by clearing its
+                            // exclusions and unticking it. Applying a different (unchecked)
+                            // outfit leaves the configured outfit's options intact.
+                            const editState = window.BCOM_ModInitializer.getState();
+                            if (editState.outfitToEdit === outfit.name) {
+                                window.BCOM_ModInitializer.clearOutfitExclusions(outfit.name);
+                                window.BCOM_ModInitializer.setState({ outfitToEdit: null });
+                            }
                             ShowOutfitNotification(`Outfit "${outfit.name}" has been applied`);
                             DialogLeave();
                         }
