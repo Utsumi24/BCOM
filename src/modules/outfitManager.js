@@ -535,10 +535,24 @@ function LoadOutfit(C, outfitName) {
         let hairOnlyApply = false;
         if (outfit.isHairOnly) hairOnlyApply = true;
 
+        // Apply-as-saved is safe for the player's own character, but on another character
+        // it would overwrite their body / hair / cosplay parts (which the outfit either
+        // captured from the player via anti-impersonation, or stored from a third party).
+        // Restrict apply to clothing + restraints when the target isn't the player.
+        const isOwnCharacter = C === Player ||
+            (typeof C.IsPlayer === 'function' && C.IsPlayer()) ||
+            C.MemberNumber === Player.MemberNumber;
+
         const shouldApplyGroup = (name) => {
             if (!name) return false;
             if (exclusions.has(name)) return false;
             if (hairOnlyApply && name !== "HairFront" && name !== "HairBack") return false;
+            if (!isOwnCharacter) {
+                // Only clothing (Appearance + Clothing) and restraints (Item) may apply.
+                // Body, hair, and cosplay slots on another character are left alone.
+                const g = (typeof AssetGroup !== 'undefined' ? AssetGroup : []).find(gg => gg.Name === name);
+                if (g && g.Category === "Appearance" && !g.Clothing) return false;
+            }
             return true;
         };
 
