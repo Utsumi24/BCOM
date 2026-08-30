@@ -535,25 +535,35 @@ function LoadOutfit(C, outfitName) {
         let hairOnlyApply = false;
         if (outfit.isHairOnly) hairOnlyApply = true;
 
-        // Apply-as-saved is safe for the player's own character, but on another character
-        // it would overwrite their body / hair / cosplay parts (which the outfit either
-        // captured from the player via anti-impersonation, or stored from a third party).
-        // Restrict apply to clothing + restraints when the target isn't the player.
+        // Who are we applying to? On another character we never impose appearance
+        // (body / hair / cosplay / face) — only clothing + restraints. On the player's
+        // own character, clothing / hair / cosplay / restraints apply by default; body
+        // is opt-in (see below).
         const isOwnCharacter = C === Player ||
             (typeof C.IsPlayer === 'function' && C.IsPlayer()) ||
             C.MemberNumber === Player.MemberNumber;
 
         const shouldApplyGroup = (name) => {
             if (!name) return false;
-            if (exclusions.has(name)) return false;
             if (hairOnlyApply && name !== "HairFront" && name !== "HairBack") return false;
-            if (!isOwnCharacter) {
-                // Only clothing (Appearance + Clothing) and restraints (Item) may apply.
-                // Body, hair, and cosplay slots on another character are left alone.
-                const g = (typeof AssetGroup !== 'undefined' ? AssetGroup : []).find(gg => gg.Name === name);
-                if (g && g.Category === "Appearance" && !g.Clothing) return false;
-            }
-            return true;
+
+            const g = (typeof AssetGroup !== 'undefined' ? AssetGroup : []).find(gg => gg.Name === name);
+            const isAppearance = !!g && g.Category === "Appearance";
+            const isClothing = isAppearance && g.Clothing;
+
+            // Other players: only clothing + restraints (Item) may apply; appearance
+            // groups are left untouched so we never change someone else's character.
+            if (!isOwnCharacter && isAppearance && !isClothing) return false;
+
+            // Body is opt-in. An outfit shouldn't reshape the player's body — that data
+            // is kept mainly for backup/restore — so body slots apply only when the user
+            // ticks them in Appearance Options (the slot is in the exclusion set, which
+            // for body means "include"). Every other section applies by default and can
+            // be toggled off (the slot in the set means "exclude").
+            const isBody = isAppearance && !isClothing && !g.BodyCosplay
+                && !(name.startsWith("Hair") || name === "Beard");
+            const toggled = exclusions.has(name);
+            return isBody ? toggled : !toggled;
         };
 
         // Slots this apply will overwrite. Two contributors:
@@ -562,8 +572,8 @@ function LoadOutfit(C, outfitName) {
         //      matches the saved outfit — clothing slots the outfit doesn't fill go empty).
         // Restraint (Item) slots are only touched where the outfit has data, so unrelated
         // restraints the player is wearing aren't removed.
-        // Body (Appearance non-Clothing) slots also only get touched where the outfit
-        // has data; body slots require a value, so we don't blank them.
+        // Body (Appearance non-Clothing) slots are opt-in: shouldApplyGroup only returns
+        // true for a body slot the user ticked, so untouched body slots stay as they are.
         // Excluded / locked slots are filtered out further down.
         const groupsBeingApplied = new Set();
         for (const item of outfitData) {
@@ -748,6 +758,11 @@ function getCurrentOutfitBCXCode(C, padlockOption = null) {
             .filter(item => {
                 const group = item?.Asset?.Group;
                 if (!group) return false;
+                // Drop empty-named appearance assets (some default body slots have
+                // Asset.Name === "") — they'd otherwise fail the importer's
+                // `item.Name && item.Group` check and the code reads as corrupted.
+                // This mirrors SaveOutfit's filter so exports import cleanly.
+                if (!item.Asset.Name || !group.Name) return false;
                 // Capture restraints, clothing, and all body/hair/markings/etc.
                 // Per-slot replacement is decided on apply, not at export time.
                 return group.Category === "Item" || group.Category === "Appearance";

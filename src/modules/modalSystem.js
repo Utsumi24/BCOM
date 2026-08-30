@@ -1076,8 +1076,10 @@ function createAppearanceOptionsModal(character, outfitName, outfitData) {
         // Working copy of this outfit's exclusion set. Committed on Done.
         const excluded = new Set(mi.getOutfitExclusions(outfitName));
 
-        // Group name -> item description for the saved outfit.
+        // Group name -> description (display) and raw item (comparison), for both the
+        // saved outfit and the character's current appearance.
         const outfitMap = {};
+        const outfitItemByGroup = {};
         if (Array.isArray(outfitData)) {
             for (const item of outfitData) {
                 if (!item || !item.Group || !item.Name) continue;
@@ -1086,23 +1088,59 @@ function createAppearanceOptionsModal(character, outfitName, outfitData) {
                     : null;
                 const desc = item.Craft?.Name || asset?.Description || item.Name;
                 outfitMap[item.Group] = desc;
+                outfitItemByGroup[item.Group] = item;
             }
         }
 
-        // Group name -> current item description on the character.
         const playerMap = {};
+        const currentItemByGroup = {};
         const appearance = (character && Array.isArray(character.Appearance)) ? character.Appearance : [];
         for (const item of appearance) {
             const group = item?.Asset?.Group;
             if (!group || group.Category !== "Appearance") continue;
             const desc = item.Craft?.Name || item.Asset.Description || item.Asset.Name;
             playerMap[group.Name] = desc;
+            currentItemByGroup[group.Name] = item;
         }
 
-        // Build the slot list: appearance groups where the outfit OR the player has
-        // an item. Each slot is bucketed into a section derived from its AssetGroup
-        // flags. Sections are ordered like the base-game wardrobe: clothing → cosplay
-        // → hair → body. Within a section, slots are alphabetical by description.
+        // Is the outfit's item for a slot 1-to-1 identical to what the character already
+        // wears (same asset + color + properties + craft)? Identical slots are no-ops on
+        // apply, so they're hidden to declutter the list. The check is conservative:
+        // anything it can't confirm as identical is shown.
+        const canon = (v) => {
+            if (Array.isArray(v)) return v.map(canon);
+            if (v && typeof v === 'object') {
+                const o = {};
+                for (const k of Object.keys(v).sort()) {
+                    if (v[k] === undefined) continue;
+                    o[k] = canon(v[k]);
+                }
+                return o;
+            }
+            return v;
+        };
+        const jsonEq = (a, b) => JSON.stringify(canon(a)) === JSON.stringify(canon(b));
+        const normColor = (color) => {
+            if (color == null) return "Default";
+            if (Array.isArray(color)) return color.map(c => (c == null || c === "") ? "Default" : c);
+            if (color === "" || String(color).toLowerCase() === "default") return "Default";
+            return color;
+        };
+        const slotIsIdentical = (name) => {
+            const o = outfitItemByGroup[name];
+            const c = currentItemByGroup[name];
+            if (!o || !c) return false; // only one side has an item — always show
+            if (o.Name !== c.Asset?.Name) return false;
+            if (!jsonEq(normColor(o.Color), normColor(c.Color))) return false;
+            if (!jsonEq(o.Property || null, c.Property || null)) return false;
+            if (!jsonEq(o.Craft || null, c.Craft || null)) return false;
+            return true;
+        };
+
+        // Build the slot list: appearance groups where the outfit OR the player has an
+        // item, minus slots that are 1-to-1 identical (no-ops). Each slot is bucketed
+        // into a section from its AssetGroup flags, ordered like the base-game wardrobe:
+        // clothing → cosplay → hair → body; alphabetical by description within a section.
         const slotNames = new Set([
             ...Object.keys(outfitMap).filter(n => {
                 const g = (typeof AssetGroup !== 'undefined' ? AssetGroup : []).find(gg => gg.Name === n);
@@ -1116,14 +1154,16 @@ function createAppearanceOptionsModal(character, outfitName, outfitData) {
             if (name.startsWith("Hair") || name === "Beard") return "hair";
             return "body";
         };
-        const slots = Array.from(slotNames).map(name => {
-            const g = (typeof AssetGroup !== 'undefined' ? AssetGroup : []).find(gg => gg.Name === name);
-            return {
-                name,
-                description: g?.Description || name,
-                section: sectionOf(g, name)
-            };
-        });
+        const slots = Array.from(slotNames)
+            .filter(name => !slotIsIdentical(name))
+            .map(name => {
+                const g = (typeof AssetGroup !== 'undefined' ? AssetGroup : []).find(gg => gg.Name === name);
+                return {
+                    name,
+                    description: g?.Description || name,
+                    section: sectionOf(g, name)
+                };
+            });
 
         // Section definitions in display order. Empty sections are skipped at render.
         const SECTION_ORDER = [
@@ -1158,49 +1198,66 @@ function createAppearanceOptionsModal(character, outfitName, outfitData) {
 
         const escapeAttr = (s) => String(s).replace(/"/g, '&quot;').replace(/</g, '&lt;');
 
-        // A toggled (excluded) slot is always "left alone" on apply — but the meaning
-        // reads differently depending on whether the outfit fills it:
-        //   • outfit has an item (yellow) → toggle = ✕ Exclude (skip the outfit's item,
-        //     keep what you're wearing).
-        //   • only you have an item (grey) → toggle = ✓ Keep (preserve your current item
-        //     instead of letting the outfit clear it).
-        // Both write to the same exclusion set; only the glyph/color/wording differ.
-        const styleFor = (hasOutfitItem, isExcluded) => {
-            if (isExcluded) {
-                return hasOutfitItem
-                    ? { bg: '#ffcdd2', border: '#c62828', mark: '✕', markColor: '#c62828' }
-                    : { bg: '#c8e6c9', border: '#2e7d32', mark: '✓', markColor: '#2e7d32' };
+        // One rule everywhere: a CHECKED (marked) box means "keep my current slot —
+        // leave it alone on apply." An empty box means the outfit's action happens.
+        //   • kept + outfit has an item:
+        //       body  → ✓ green "keep your body" (body is kept by default; opt in by
+        //               unchecking)
+        //       other → ✕ red "exclude" (you chose to skip the outfit's item)
+        //   • kept + only you have an item → ✓ green "keep" (it isn't removed on apply)
+        //   • not kept → empty box: yellow if the outfit fills the slot (it'll be applied),
+        //     grey if only you have one (it'll be removed).
+        const styleFor = (optIn, hasOutfitItem, kept) => {
+            if (!kept) {
+                return {
+                    bg: hasOutfitItem ? '#fff9c4' : '#eceff1',
+                    border: hasOutfitItem ? '#fbc02d' : '#cfd8dc',
+                    mark: '',
+                    markColor: '#999'
+                };
             }
-            return {
-                bg: hasOutfitItem ? '#fff9c4' : '#eceff1',
-                border: hasOutfitItem ? '#fbc02d' : '#cfd8dc',
-                mark: '',
-                markColor: '#999'
-            };
+            if (hasOutfitItem && !optIn) {
+                return { bg: '#ffcdd2', border: '#c62828', mark: '✕', markColor: '#c62828' };
+            }
+            return { bg: '#c8e6c9', border: '#2e7d32', mark: '✓', markColor: '#2e7d32' };
         };
 
         const renderRow = (slot) => {
             const outfitItem = outfitMap[slot.name];
             const playerItem = playerMap[slot.name];
-            const isExcluded = excluded.has(slot.name);
+            const optIn = slot.section === 'body';
+            const toggled = excluded.has(slot.name);
             const hasOutfitItem = !!outfitItem;
-            const s = styleFor(hasOutfitItem, isExcluded);
+            // Matches shouldApplyGroup: body applies only when opted in (in set); every
+            // other section applies by default (out of set). kept = the inverse.
+            const willApply = optIn ? toggled : !toggled;
+            const kept = !willApply;
+            const s = styleFor(optIn, hasOutfitItem, kept);
 
             const tipParts = [];
             if (outfitItem) tipParts.push(`Outfit: ${outfitItem}`);
             if (playerItem) tipParts.push(`Currently: ${playerItem}`);
             if (!tipParts.length) tipParts.push("Empty");
-            if (isExcluded) {
-                tipParts.push("Will keep your current item on apply");
+            if (kept) {
+                if (optIn) {
+                    tipParts.push("Keeping your body — uncheck to apply the outfit's version");
+                } else if (hasOutfitItem) {
+                    tipParts.push("Excluded — keeping what you're wearing, not the outfit's item");
+                } else {
+                    tipParts.push("Keeping your current item (it won't be removed on apply)");
+                }
             } else if (hasOutfitItem) {
-                tipParts.push("Click to skip this slot and keep your current item");
+                tipParts.push("Will apply the outfit's item — check to keep yours instead");
+            } else if (slot.section === 'clothing') {
+                tipParts.push("Will be removed on apply — check to keep it");
             } else {
-                tipParts.push("Click to keep your current item (otherwise it's removed)");
+                tipParts.push("Kept (the outfit doesn't include this slot)");
             }
 
             return `
                 <div class="aopt-row" data-group="${escapeAttr(slot.name)}"
                     data-has-outfit="${hasOutfitItem ? '1' : '0'}"
+                    data-optin="${optIn ? '1' : '0'}"
                     title="${escapeAttr(tipParts.join('\n'))}"
                     style="
                         display: flex; align-items: center; gap: 10px;
@@ -1239,6 +1296,12 @@ function createAppearanceOptionsModal(character, outfitName, outfitData) {
                         <span class="aopt-caret" style="display:inline-block; width:12px;">▼</span>
                         <span style="flex:1;">${escapeAttr(def.label)}</span>
                         <span style="color:#78909c; font-weight:normal;">${list.length}</span>
+                        <span class="aopt-section-toggle-wrap" title="Skip all in this section (keep what you're wearing)"
+                            style="display:inline-flex; align-items:center; gap:4px; font-weight:normal; font-size:11px; color:#546e7a; cursor:pointer;">
+                            skip all
+                            <input type="checkbox" class="aopt-section-toggle" data-section="${def.key}"
+                                style="width:14px; height:14px; cursor:pointer; margin:0;">
+                        </span>
                     </div>
                     <div class="aopt-section-body" data-section-body="${def.key}">
                         ${list.map(renderRow).join('')}
@@ -1251,11 +1314,13 @@ function createAppearanceOptionsModal(character, outfitName, outfitData) {
         modal.innerHTML = `
             <h3 style="margin: 0 0 6px 0; color: #333;">${heading}</h3>
             <p style="color: #666; margin: 0 0 10px 0; font-size: 13px;">
-                Outfits apply exactly as saved. Click a slot to change how it's handled:
-                <br><span style="color: #c9a300;">Yellow</span> = outfit fills this slot →
-                click for <span style="color: #c62828;">✕ Exclude</span> (skip it, keep what you're wearing).
+                A <b>checked</b> slot is kept as-is on apply; an <b>empty</b> one takes the outfit's action. Click a slot to toggle it:
+                <br><span style="color: #c9a300;">Yellow</span> = the outfit's item will be applied →
+                check it for <span style="color: #c62828;">✕ Exclude</span> (keep what you're wearing).
                 <br><span style="color: #607d8b;">Grey</span> = only you have an item here →
-                click for <span style="color: #2e7d32;">✓ Keep</span> (otherwise it's removed on apply).
+                check it for <span style="color: #2e7d32;">✓ Keep</span> (otherwise it's removed on apply).
+                <br><b>Body</b> slots are <span style="color: #2e7d32;">✓ checked</span> (kept) by default so your body isn't changed →
+                uncheck one to apply the outfit's version. Use <b>skip all</b> on a section header to keep the whole section.
             </p>
             <div id="aoptList" style="
                 flex: 1; overflow-y: auto;
@@ -1294,9 +1359,11 @@ function createAppearanceOptionsModal(character, outfitName, outfitData) {
 
         function repaintRow(row) {
             const group = row.dataset.group;
+            const optIn = row.dataset.optin === '1';
             const hasOutfitItem = row.dataset.hasOutfit === '1';
-            const isExcluded = excluded.has(group);
-            const s = styleFor(hasOutfitItem, isExcluded);
+            const toggled = excluded.has(group);
+            const willApply = optIn ? toggled : !toggled;
+            const s = styleFor(optIn, hasOutfitItem, !willApply);
             row.style.background = s.bg;
             row.style.borderColor = s.border;
             const mark = row.querySelector('.aopt-mark');
@@ -1304,7 +1371,50 @@ function createAppearanceOptionsModal(character, outfitName, outfitData) {
             mark.style.color = s.markColor;
         }
 
+        // "Kept" (a section's skip-all state) maps to set membership differently per
+        // section: body is opt-in (kept = NOT in the set), every other section is
+        // opt-out (kept = IN the set).
+        const keptMeansInSet = (key) => key !== 'body';
+
+        // Skip all = mark every row in the section as kept; un-skip = let them apply.
+        function setSectionSkip(key, skip) {
+            const wantInSet = skip ? keptMeansInSet(key) : !keptMeansInSet(key);
+            list.querySelectorAll(`[data-section-body="${key}"] .aopt-row`).forEach(row => {
+                if (wantInSet) excluded.add(row.dataset.group);
+                else excluded.delete(row.dataset.group);
+                repaintRow(row);
+            });
+            refreshSectionToggle(key);
+        }
+
+        // Sync a section's "skip all" checkbox: checked = all kept, unchecked = none
+        // kept, indeterminate = mixed.
+        function refreshSectionToggle(key) {
+            const cb = list.querySelector(`.aopt-section-toggle[data-section="${key}"]`);
+            if (!cb) return;
+            const rows = list.querySelectorAll(`[data-section-body="${key}"] .aopt-row`);
+            let kept = 0;
+            rows.forEach(row => {
+                const inSet = excluded.has(row.dataset.group);
+                if (keptMeansInSet(key) ? inSet : !inSet) kept++;
+            });
+            if (kept === 0) { cb.checked = false; cb.indeterminate = false; }
+            else if (kept === rows.length) { cb.checked = true; cb.indeterminate = false; }
+            else { cb.indeterminate = true; }
+        }
+
         list.addEventListener('click', (e) => {
+            // Section "skip all" checkbox (handled before the header collapse, so a
+            // click here never collapses the section).
+            const toggleWrap = e.target.closest('.aopt-section-toggle-wrap');
+            if (toggleWrap) {
+                const cb = toggleWrap.querySelector('.aopt-section-toggle');
+                if (e.target !== cb) cb.checked = !cb.checked; // clicked the label, not the box
+                cb.indeterminate = false;
+                setSectionSkip(cb.dataset.section, cb.checked);
+                return;
+            }
+
             // Section header toggles collapse/expand of its body.
             const header = e.target.closest('.aopt-section-header');
             if (header) {
@@ -1325,11 +1435,17 @@ function createAppearanceOptionsModal(character, outfitName, outfitData) {
             if (excluded.has(group)) excluded.delete(group);
             else excluded.add(group);
             repaintRow(row);
+            const sb = row.closest('[data-section-body]');
+            if (sb) refreshSectionToggle(sb.dataset.section);
         });
+
+        // Set each section checkbox to its initial state (checked / unchecked / mixed).
+        SECTION_ORDER.forEach(def => refreshSectionToggle(def.key));
 
         clearBtn.addEventListener('click', () => {
             excluded.clear();
             list.querySelectorAll('.aopt-row').forEach(repaintRow);
+            SECTION_ORDER.forEach(def => refreshSectionToggle(def.key));
         });
 
         function close(commit) {
