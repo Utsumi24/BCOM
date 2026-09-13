@@ -2,12 +2,44 @@
 
 Any changes made to the addon will be here for easier documentation.
 
+## [v0.8.4.2]
+- Fixed the Outfit Studio not saving body, hair or cosplay changes.  Anything done with "Change Appearance" was getting replaced with your current appearance on save
+- Fixed "Copy BCX Code" in the Outfit Studio putting a broken padlock on every item, which errored out when the code was imported
+- Fixed the Outfit Studio's "Change Appearance" screen missing buttons and drawing the character at the wrong size.  It now matches the base game
+- Fixed importing a BCX code dropping crafted item names, descriptions and locks
+- Fixed cancelling a padlock config window resetting your saved combination/password back to the default
+- Padlock config windows now open with your current settings filled in.  The timer windows also remember the duration instead of resetting to 5 minutes
+- Fixed renaming an outfit breaking its Appearance Options.  Deleting an outfit now clears them too
+- The Appearance Options button counts slots as "changed" instead of "excluded", since body slots work the opposite way around
+- Faded out Appearance Options slots that don't do anything.  If the outfit doesn't include the slot and it isn't clothing, it stays either way
+- Fixed the hover preview's locked item list showing old data after overwriting an outfit
+- Fixed the Outfit Manager checking every button twice per click
+- Fixed a leftover file picker if you close the Restore window without picking a file
+- Limited some Outfit Studio display fixes to the Studio itself.  They were running on every screen and could interfere with the base game's appearance screen
+- Added guards so the Outfit Manager doesn't error if the selected character goes away while it's open
+- Ticking a slot in Appearance Options now always shows green.  It used to turn red when the outfit also had an item in that slot, which looked like the item was being blocked rather than kept
+- When saving a filtered outfit, it will properly save the slots you ticked
+- Fixed a crash when using tighten/loosen on an item in the Outfit Studio
+- Tighten/loosen adjustments are now saved with an outfit and restored when you apply it, including in exported codes
+- The Outfit Studio no longer restricts you based on what you're wearing outside it.  Being bound in a chatroom was greying out "Adjust Tightness" and locking extended item options
+- Added a "Delete All" button in Folder Management to wipe every saved outfit and folder.  You have to type DELETE in capitals and then confirm a second time, and it reminds you to back up first
+
+
+
+## [v0.8.4.1]
+- Changed how the Body category applies. Body slots (skin, face, eyes, etc.) are now kept as-is by default when you apply an outfit, so applying an outfit no longer changes your character's body. The body data is still saved with every outfit for backup/restore — you just opt in to applying it. (Note: outfits only ever store your own body, never another player's, so this is purely about not overwriting your current body with an older saved version.)
+- Made the Appearance Options checkboxes behave consistently: a checked slot always means "keep what I'm currently wearing," and an empty slot means the outfit's version is applied. Body slots simply start checked (kept); uncheck one to apply the outfit's version.
+- Added a "skip all" checkbox to each section header so you can keep or apply an entire section (Clothing, Cosplay, Hair, Body) at once instead of clicking each slot. Ticking the Body section's box keeps all body slots; unticking it applies them all (a one-click way to restore your saved body).
+- Slots where the outfit's item is identical to what you're already wearing are now hidden, since applying them does nothing. The comparison checks the item, color, properties, and craft — anything that isn't a 1-to-1 match is still shown.
+- Fixed a bug where exporting your current outfit (rather than a saved one) could produce a code that failed to re-import as "corrupted data." Empty body slots are now filtered out of the exported code, matching how saved outfits already worked.
+
 ## [v0.8.4]
 - Added new feature: Appearance Options. This button is only visible when your character is selected in the BCOM menu. This feature replaces the "Apply Hair", "Hair Only", and "Include Appearance" checkboxes. To access this feature, check the box next to a saved outfit and the Appearance Options button will be clickable. Inside, it lets you filter slots individually.
 	- Yellow slots are items the selected outfit will apply. Clicking the slot will mark it Red and exclude that item from bein
   applied.
 	- Grey slots are items that you are currently wearing that the outfit doesn't include. Clicking the slot will mark it Green and keep the item you're currently wearing.
-- The checkbox next to each outfit now serves two purposes: it selects an outfit for editing in the Outfit Studio, and it marks which outfit's Appearance Options are currently active. If you make changes, the Appearance Options button will show a `(#)` next to it indicating how many slots have been changed. Appearance Options only take effect while the outfit's checkbox is ticked and unchecking the box reverts the outfit to what was originally saved (your changes are kept in memory for the rest of the session, so re-ticking the box brings them back)
+The checkbox next to each outfit now serves two purposes: it selects an outfit for editing in the Outfit Studio, and it marks which outfit's Appearance Options are currently active. If you make changes, the Appearance Options button will show a `(#)` next to it indicating how many slots have been changed. Appearance Options only take effect while the outfit's checkbox is ticked and unchecking the box reverts the outfit to what was originally saved (your changes are kept in memory for the rest of the session, so re-ticking the box brings them back)
+- Changes made to an outfit in the Appearance Options will persist for the rest of the session.  Changes you make will be cleared after you either apply the item or refresh the webpage
 - Saving while an outfit's checkbox is ticked will save a filtered copy of that outfit (minus any excluded slots) under a new name, leaving the original outfit untouched. Saving with no checkbox ticked still captures your current appearance as a fresh outfit like before.
 - Removed `[Hair]` from outfit display names
 - Changed how outfits apply: outfits now apply exactly as saved (including appearance). Clothing slots are cleared on apply and refilled from the outfit data, so leftover clothing from a previous outfit no longer mixes in. Restraints you're wearing are not stripped unless the outfit explicitly includes that slot.

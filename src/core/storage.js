@@ -26,21 +26,31 @@ function getCachedStorageData() {
     return cachedStorageData;
 }
 
+// Decompress an outfit's item list, memoised per outfit name.
+//
+// The cached entry keeps the compressed blob it was built from, so overwriting, renaming
+// or restoring an outfit produces a different blob and the entry is rebuilt. Keying on the
+// name alone meant the cache went stale for the rest of the session after any edit, and
+// nothing ever called clearPerformanceCaches to fix it.
 function getCachedOutfitData(outfit) {
-    if (!outfitDataCache.has(outfit.name)) {
-        try {
-            const decompressed = LZString.decompressFromBase64(outfit.data);
-            if (decompressed) {
-                const parsed = JSON.parse(decompressed);
-                outfitDataCache.set(outfit.name, parsed);
-                return parsed;
-            }
-        } catch (error) {
-            console.error("BCOM: Error caching outfit data:", error);
-        }
-        return null;
+    if (!outfit || !outfit.data) return null;
+
+    const cached = outfitDataCache.get(outfit.name);
+    if (cached && cached.data === outfit.data) {
+        return cached.parsed;
     }
-    return outfitDataCache.get(outfit.name);
+
+    try {
+        const decompressed = LZString.decompressFromBase64(outfit.data);
+        if (decompressed) {
+            const parsed = JSON.parse(decompressed);
+            outfitDataCache.set(outfit.name, { data: outfit.data, parsed });
+            return parsed;
+        }
+    } catch (error) {
+        console.error("BCOM: Error caching outfit data:", error);
+    }
+    return null;
 }
 
 function clearPerformanceCaches() {

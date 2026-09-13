@@ -152,6 +152,15 @@ function clearOutfitExclusions(outfitName) {
     if (!outfitName) return;
     outfitExclusions.delete(outfitName);
 }
+// Follow a rename. The Map is keyed by outfit name, so without this the entry is
+// orphaned and the outfit's Appearance Options silently stop applying.
+function renameOutfitExclusions(oldName, newName) {
+    if (!oldName || !newName || oldName === newName) return;
+    const set = outfitExclusions.get(oldName);
+    outfitExclusions.delete(oldName);
+    if (set && set.size > 0) outfitExclusions.set(newName, set);
+    else outfitExclusions.delete(newName);
+}
 function hasOutfitExclusions(outfitName) {
     const set = outfitExclusions.get(outfitName);
     return !!(set && set.size > 0);
@@ -191,6 +200,7 @@ if (typeof module !== 'undefined' && module.exports) {
         getOutfitExclusions,
         setOutfitExclusions,
         clearOutfitExclusions,
+        renameOutfitExclusions,
         hasOutfitExclusions,
         getOutfitExclusionCount,
         OUTFIT_PRIORITIES,
@@ -206,6 +216,7 @@ window.BCOM_ModInitializer = {
     getOutfitExclusions,
     setOutfitExclusions,
     clearOutfitExclusions,
+    renameOutfitExclusions,
     hasOutfitExclusions,
     getOutfitExclusionCount,
     OUTFIT_PRIORITIES,

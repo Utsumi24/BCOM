@@ -20,6 +20,12 @@ var OutfitStudioHelpOverlay = null; // DOM element for help overlay
 var OutfitStudioNeedsRefresh = 0; // Counter for how many frames we should refresh after applying an item
 var OutfitStudioInAppearance = false; // Track if we're in the appearance screen
 var OutfitStudioInLayering = false; // Track if we're in the layering screen
+// The dummy's real IsPlayer, stashed while the appearance screen borrows it.
+// See OutfitStudioSetAppearanceIsPlayer.
+var OutfitStudioSavedIsPlayer = null;
+// The Player's real CanInteract, stashed while the Studio borrows it.
+// See OutfitStudioBorrowCanInteract.
+var OutfitStudioSavedCanInteract = null;
 
 // ===== UTILITY FUNCTIONS =====
 // Clear all BC tooltips to prevent them from persisting after alerts
@@ -68,8 +74,17 @@ function OutfitStudioRegisterHooks() {
         }
 
         // Hook InventoryIsPermissionBlocked to handle null/missing PermissionItems
+        // These four hooks are global — the SDK installs them for every screen in the game.
+        // They only ever exist to patch up drawing and permission checks *inside* the
+        // Studio, so every one of them is gated on the Studio screen as well as the mode
+        // flag. Without the screen check they leak: DrawItemPreview in particular draws
+        // nothing while OutfitStudioInExtendedItem is set, and BC's own appearance editor
+        // renders every clothing thumbnail in its 3x3 grid through DrawItemPreview, so a
+        // stale flag would blank the whole grid.
+        const inOutfitStudio = () => CurrentScreen === "BCOMOutfitStudio";
+
         modApi.hookFunction('InventoryIsPermissionBlocked', 0, (args, next) => {
-            if (OutfitStudioInExtendedItem) {
+            if (inOutfitStudio() && OutfitStudioInExtendedItem) {
                 let [C, AssetName, AssetGroup, AssetType] = args;
                 if (!C || !C.PermissionItems) {
                     args[0] = Player;
@@ -80,7 +95,7 @@ function OutfitStudioRegisterHooks() {
 
         // Hook InventoryCheckLimitedPermission to handle null/missing LimitedItems
         modApi.hookFunction('InventoryCheckLimitedPermission', 0, (args, next) => {
-            if (OutfitStudioInExtendedItem) {
+            if (inOutfitStudio() && OutfitStudioInExtendedItem) {
                 let [C, Item, ItemType] = args;
                 if (!C || !C.LimitedItems) {
                     args[0] = Player;
@@ -91,7 +106,7 @@ function OutfitStudioRegisterHooks() {
 
         // Hook DrawItemPreview to suppress character preview drawing in extended mode
         modApi.hookFunction('DrawItemPreview', 0, (args, next) => {
-            if (OutfitStudioInExtendedItem) {
+            if (inOutfitStudio() && OutfitStudioInExtendedItem) {
                 return; // Don't draw item preview - we already drew the character
             }
             return next(args);
@@ -103,6 +118,9 @@ function OutfitStudioRegisterHooks() {
         // Hook DrawAssetGroupZone to suppress in extended mode and prevent duplicate drawing
         modApi.hookFunction('DrawAssetGroupZone', 0, (args, next) => {
             const [character, zone, zoom, x, y, ratio, color, thickness] = args;
+
+            // Off the Studio screen this is BC drawing its own UI — never interfere.
+            if (!inOutfitStudio()) return next(args);
 
             if (OutfitStudioInExtendedItem) {
                 return; // Don't draw zones in extended mode
@@ -173,6 +191,19 @@ function OutfitStudioRegisterHooks() {
                 const result = next(args);
                 character.IsPlayer = originalIsPlayer;
                 return result;
+            }
+            return next(args);
+        });
+
+        // The Studio borrows the dummy's IsPlayer while the appearance screen is open so
+        // BC lays the screen out the way it does for your own character. That also switches
+        // on AppearanceGroupAllowed's owner-rule enforcement, which bails out early on
+        // !C.IsPlayer() and otherwise applies your owner's BlockAppearance rules — locking
+        // groups in what is meant to be an unrestricted design tool. Keep the layout, drop
+        // the restriction. Scoped to a Studio-initiated session on the dummy only.
+        modApi.hookFunction('AppearanceGroupAllowed', 0, (args, next) => {
+            if (OutfitStudioInAppearance && OutfitStudioChar && args[0] === OutfitStudioChar) {
+                return true;
             }
             return next(args);
         });
@@ -277,12 +308,25 @@ function BCOMOutfitStudioLoad() {
         return;
     }
 
+    // CharacterLoadSimple hands back the same object every visit, so clear any IsPlayer
+    // override left behind by an appearance session that ended without its callback.
+    OutfitStudioSetAppearanceIsPlayer(false);
+    // Belt and braces: every borrow is inside a finally, but the Player object outlives
+    // the Studio entirely, so never start a session with one still outstanding.
+    OutfitStudioReturnCanInteract();
+
     // Copy necessary properties from Player for appearance and item checks
     OutfitStudioChar.HeightRatio = Player.HeightRatio;
     OutfitStudioChar.HeightModifier = 3; // Default standing pose uses 3, not 0!
     OutfitStudioChar.HeightRatioProportion = 1; // Default value - needed because CharacterAppearanceForceUpCharacter skips setting this
     OutfitStudioChar.MustDraw = true;
     OutfitStudioChar.AllowItem = true;
+    // The Studio dummy is the player's own scratch character, not another person. Mark it
+    // so SaveOutfit / getCurrentOutfitBCXCode treat it as "own" and keep the body, hair and
+    // cosplay the user built here instead of substituting the Player's current appearance.
+    // (Setting MemberNumber instead would break CharacterAppearanceForceUpCharacter below,
+    // which relies on it staying undefined.)
+    OutfitStudioChar.BCOMOwnDummy = true;
 
     // Copy wardrobe properties so the appearance screen's wardrobe feature works
     // We need to copy these by reference so changes to wardrobe are reflected
@@ -417,6 +461,11 @@ function BCOMOutfitStudioExit() {
     if (OutfitStudioChar && OutfitStudioChar.Appearance) {
         window.BCOM_OutfitStudio_WorkInProgress = [...OutfitStudioChar.Appearance];
     }
+
+    // Hand the dummy its own IsPlayer back before we drop the reference to it, and the
+    // Player its own CanInteract.
+    OutfitStudioSetAppearanceIsPlayer(false);
+    OutfitStudioReturnCanInteract();
 
     // Exit layering if active
     if (typeof Layering !== 'undefined' && Layering.IsActive()) {
@@ -695,68 +744,89 @@ function BCOMOutfitStudioRun() {
         // IMPORTANT: Set CurrentCharacter for the ENTIRE extended item rendering cycle
         // BC's extended item system uses CurrentCharacter in many nested function calls
         // We need to set it at the top level and restore it at the end of Run()
+        //
+        // try/finally, not a plain restore at the end: an item's Draw function throwing
+        // (or the lock-name bail-out below returning early) used to leave CurrentCharacter
+        // pointing at the dummy for the rest of the session.
         const savedCurrentCharacter = CurrentCharacter;
         CurrentCharacter = OutfitStudioChar;
+        OutfitStudioBorrowCanInteract();
+        try {
+            // Draw our character at the same position as normal
+            if (OutfitStudioChar) {
+                OutfitStudioChar.MustDraw = true;
 
-        // Draw our character at the same position as normal
-        if (OutfitStudioChar) {
-            OutfitStudioChar.MustDraw = true;
-
-            // Call CharacterAppearanceSetHeightModifiers to set HeightRatio
-            // This is needed for proper rendering in extended item mode too
-            if (typeof CharacterAppearanceSetHeightModifiers === 'function') {
-                CharacterAppearanceSetHeightModifiers(OutfitStudioChar);
-            }
-
-            // IMPORTANT: Pass true for IsHeightResizeAllowed so BC respects the character's HeightRatio
-            DrawCharacter(OutfitStudioChar, 250, 0, 1, true);
-        }
-
-        // IMPORTANT: Check DialogMenuMode first to route to the correct Draw function
-        // When in a submenu like "tighten", we need to call the submenu's Draw function, not the item's
-        if (DialogMenuMode === "tighten" && typeof TightenLoosenItemDraw === 'function') {
-            // In tighten/loosen submenu
-            TightenLoosenItemDraw();
-        } else {
-            // Call the appropriate Draw function for the main extended item menu
-            // Use our own flag to determine if we're editing lock or item properties
-            // BC's DialogFocusItem/DialogFocusSourceItem can be cleared by other code between frames
-            let drawFuncName;
-            if (OutfitStudioEditingLock) {
-                // Editing lock properties - get lock name from DialogFocusItem if available, otherwise from item
-                let lockName;
-                if (DialogFocusItem && DialogFocusItem.Asset) {
-                    lockName = DialogFocusItem.Asset.Name;
-                } else if (OutfitStudioExtendedItem && OutfitStudioExtendedItem.Property && OutfitStudioExtendedItem.Property.LockedBy) {
-                    lockName = OutfitStudioExtendedItem.Property.LockedBy;
-                } else {
-                    console.error('[Outfit Studio] Cannot determine lock name for draw function!');
-                    return;
+                // Call CharacterAppearanceSetHeightModifiers to set HeightRatio
+                // This is needed for proper rendering in extended item mode too
+                if (typeof CharacterAppearanceSetHeightModifiers === 'function') {
+                    CharacterAppearanceSetHeightModifiers(OutfitStudioChar);
                 }
-                drawFuncName = `InventoryItemMisc${lockName}Draw`;
-            } else {
-                // Editing item properties
-                drawFuncName = `Inventory${OutfitStudioExtendedItem.Asset.Group.Name}${OutfitStudioExtendedItem.Asset.Name}Draw`;
+
+                // IMPORTANT: Pass true for IsHeightResizeAllowed so BC respects the character's HeightRatio
+                DrawCharacter(OutfitStudioChar, 250, 0, 1, true);
             }
 
-            if (typeof window[drawFuncName] === 'function') {
-                window[drawFuncName]();
-            } else {
-                console.error('[Outfit Studio] Draw function not found:', drawFuncName);
-            }
+            OutfitStudioDrawExtendedItem();
+
+            // Draw an exit button in the top right
+            DrawButton(1885, 25, 90, 90, "", "White", "Icons/Exit.png", "Exit");
+        } finally {
+            OutfitStudioReturnCanInteract();
+            CurrentCharacter = savedCurrentCharacter;
         }
-
-        // Draw an exit button in the top right
-        DrawButton(1885, 25, 90, 90, "", "White", "Icons/Exit.png", "Exit");
-
-        // Restore CurrentCharacter at the end of the extended item rendering
-        CurrentCharacter = savedCurrentCharacter;
     } else {
         // Show the container when not in extended mode
         const container = document.getElementById('outfit-studio-container');
         if (container && !OutfitStudioInColorPicker && !OutfitStudioInLayering) {
             container.style.display = 'block';
         }
+    }
+}
+
+// Routes to whichever of BC's draw functions the current extended-item state needs.
+// Split out of Run so its early return can't skip Run's CurrentCharacter restore.
+// The caller sets CurrentCharacter and borrows Player.CanInteract around this.
+function OutfitStudioDrawExtendedItem() {
+    // IMPORTANT: Check DialogMenuMode first to route to the correct Draw function
+    // When in a submenu like "tighten", we need the submenu's Draw function, not the item's
+    if (DialogMenuMode === "tighten" && typeof TightenLoosenItemDraw === 'function') {
+        // BC takes the item as an argument (TightenLoosenItemDraw(item), and it reads
+        // item.Difficulty immediately), so calling it bare threw "Cannot read properties
+        // of undefined". Dialog.js passes DialogTightenLoosenItem and bails out when it's
+        // null; do the same, except that here there is no "items" mode to fall back to.
+        if (DialogTightenLoosenItem) {
+            TightenLoosenItemDraw(DialogTightenLoosenItem);
+        } else {
+            OutfitStudioExitExtendedItem();
+        }
+        return;
+    }
+
+    // Call the appropriate Draw function for the main extended item menu.
+    // Use our own flag to determine if we're editing lock or item properties:
+    // BC's DialogFocusItem/DialogFocusSourceItem can be cleared by other code between frames.
+    let drawFuncName;
+    if (OutfitStudioEditingLock) {
+        // Editing lock properties - lock name from DialogFocusItem if available, else the item
+        let lockName;
+        if (DialogFocusItem && DialogFocusItem.Asset) {
+            lockName = DialogFocusItem.Asset.Name;
+        } else if (OutfitStudioExtendedItem && OutfitStudioExtendedItem.Property && OutfitStudioExtendedItem.Property.LockedBy) {
+            lockName = OutfitStudioExtendedItem.Property.LockedBy;
+        } else {
+            console.error('[Outfit Studio] Cannot determine lock name for draw function!');
+            return;
+        }
+        drawFuncName = `InventoryItemMisc${lockName}Draw`;
+    } else {
+        // Editing item properties
+        drawFuncName = `Inventory${OutfitStudioExtendedItem.Asset.Group.Name}${OutfitStudioExtendedItem.Asset.Name}Draw`;
+    }
+
+    if (typeof window[drawFuncName] === 'function') {
+        window[drawFuncName]();
+    } else {
+        console.error('[Outfit Studio] Draw function not found:', drawFuncName);
     }
 }
 
@@ -944,6 +1014,7 @@ function BCOMOutfitStudioClick() {
         // BC's extended item system uses CurrentCharacter in many nested function calls
         const savedCurrentCharacter = CurrentCharacter;
         CurrentCharacter = OutfitStudioChar;
+        OutfitStudioBorrowCanInteract();
 
         try {
             // NOTE: We do NOT intercept the exit button (1885, 25, 90, 90) here.
@@ -954,8 +1025,13 @@ function BCOMOutfitStudioClick() {
             // IMPORTANT: Check DialogMenuMode first to route to the correct Click function
             // When in a submenu like "tighten", we need to call the submenu's Click function, not the item's
             if (DialogMenuMode === "tighten" && typeof TightenLoosenItemClick === 'function') {
-                // In tighten/loosen submenu
-                TightenLoosenItemClick();
+                // In tighten/loosen submenu. Same signature problem as the Draw call:
+                // BC's is TightenLoosenItemClick(C, item) and it does `item.Difficulty ??= 0`
+                // straight away, so both arguments are required. Dialog.js passes
+                // (CurrentCharacter, DialogTightenLoosenItem).
+                if (DialogTightenLoosenItem) {
+                    TightenLoosenItemClick(OutfitStudioChar, DialogTightenLoosenItem);
+                }
                 // TightenLoosenItemClick handles exit internally by clearing DialogTightenLoosenItem
                 // but does NOT change DialogMenuMode. We need to navigate back if it exited.
                 if (DialogTightenLoosenItem == null) {
@@ -994,7 +1070,8 @@ function BCOMOutfitStudioClick() {
                 console.error('[Outfit Studio] Click function not found:', clickFuncName);
             }
         } finally {
-            // Always restore CurrentCharacter
+            // Always restore CurrentCharacter and the Player's own CanInteract
+            OutfitStudioReturnCanInteract();
             CurrentCharacter = savedCurrentCharacter;
         }
 
@@ -1389,14 +1466,21 @@ function OutfitStudioEditLockProperties() {
     // DON'T set CurrentCharacter here - our ExtendedItemDraw hook will set it temporarily when needed
     // This prevents BC's dialog interface from auto-drawing
 
-    // Call ExtendedItemInit for the lock
-    if (typeof ExtendedItemInit === 'function') {
-        ExtendedItemInit(OutfitStudioChar, DialogFocusItem, false, false);
-    }
+    // Borrowed for the same reason as the Draw/Click dispatch: a Load function may gate
+    // its setup on the Player being able to use their hands.
+    OutfitStudioBorrowCanInteract();
+    try {
+        // Call ExtendedItemInit for the lock
+        if (typeof ExtendedItemInit === 'function') {
+            ExtendedItemInit(OutfitStudioChar, DialogFocusItem, false, false);
+        }
 
-    // Call the lock's Load function (reuse the variable we already declared)
-    if (typeof window[loadFuncName] === 'function') {
-        window[loadFuncName]();
+        // Call the lock's Load function (reuse the variable we already declared)
+        if (typeof window[loadFuncName] === 'function') {
+            window[loadFuncName]();
+        }
+    } finally {
+        OutfitStudioReturnCanInteract();
     }
 
     // Note: We don't restore CurrentCharacter here because we need it during Draw/Click
@@ -1426,15 +1510,22 @@ function OutfitStudioOpenProperties() {
     DialogFocusItem = equippedItem;
     OutfitStudioChar.FocusGroup = OutfitStudioSelectedGroup; // Some functions check this
 
-    // Call ExtendedItemInit to properly initialize the extended item
-    if (typeof ExtendedItemInit === 'function') {
-        ExtendedItemInit(OutfitStudioChar, equippedItem, false, false);
-    }
+    // Borrowed for the same reason as the Draw/Click dispatch: a Load function may gate
+    // its setup on the Player being able to use their hands.
+    OutfitStudioBorrowCanInteract();
+    try {
+        // Call ExtendedItemInit to properly initialize the extended item
+        if (typeof ExtendedItemInit === 'function') {
+            ExtendedItemInit(OutfitStudioChar, equippedItem, false, false);
+        }
 
-    // Call the item's Load function
-    const loadFuncName = `Inventory${equippedItem.Asset.Group.Name}${equippedItem.Asset.Name}Load`;
-    if (typeof window[loadFuncName] === 'function') {
-        window[loadFuncName]();
+        // Call the item's Load function
+        const loadFuncName = `Inventory${equippedItem.Asset.Group.Name}${equippedItem.Asset.Name}Load`;
+        if (typeof window[loadFuncName] === 'function') {
+            window[loadFuncName]();
+        }
+    } finally {
+        OutfitStudioReturnCanInteract();
     }
 }
 
@@ -2020,7 +2111,10 @@ function OutfitStudioCopyBCXCode() {
     // Use BCOM's actual BCX export function from the Outfit Manager
     if (window.BCOM_OutfitManager && typeof window.BCOM_OutfitManager.getCurrentOutfitBCXCode === 'function') {
         // Get BCX code - this returns a compressed base64 string
-        const bcxCode = window.BCOM_OutfitManager.getCurrentOutfitBCXCode(OutfitStudioChar, true, false, null);
+        // "Keep Original" leaves each item's own lock alone. Passing anything else here
+        // (an old 4-arg call used to pass `true`) makes applyPadlockLogic write a bogus
+        // Property.LockedBy onto every item that has a Property.
+        const bcxCode = window.BCOM_OutfitManager.getCurrentOutfitBCXCode(OutfitStudioChar, "Keep Original");
 
         if (bcxCode) {
             // Copy to clipboard
@@ -2321,6 +2415,62 @@ function OutfitStudioHideHelp() {
     OutfitStudioShowActionButtons(!OutfitStudioInExtendedItem && !OutfitStudioInColorPicker && !OutfitStudioInLayering);
 }
 
+// BC's appearance screen renders a different, reduced UI for anyone who isn't the Player,
+// and the Studio dummy is a CharacterType.SIMPLE character, so IsPlayer() is false. That
+// costs us, in Appearance.js:
+//   * AppearanceMenuBuild  - the main menu loses Reset / WearRandom / Random / Copy /
+//                            Paste, and Cloth mode loses WearRandom / PermissionMode
+//   * AppearanceRun        - the character is drawn at (660, 0, 1) instead of
+//                            (660, 90, 0.95), so it sits higher and larger than normal,
+//                            and the header reads "select <name>'s appearance"
+//   * CharacterAppearanceCopyToClipboard / CharacterAppearancePaste - both bail out early
+//                            on !C.IsPlayer(), so copy/paste would not work even if the
+//                            buttons were drawn
+// Borrowing IsPlayer for the duration of the screen is the same trick the DrawCharacter
+// hook above already uses to stop the dummy being treated as a bystander.
+//
+// Kept in a module variable rather than a closure: CharacterLoadSimple returns the *same*
+// character object on the next Studio visit, so an override leaked by an exit that skips
+// the callback would persist for the rest of the session.
+function OutfitStudioSetAppearanceIsPlayer(active) {
+    if (!OutfitStudioChar) return;
+    if (active) {
+        if (OutfitStudioSavedIsPlayer === null) {
+            OutfitStudioSavedIsPlayer = OutfitStudioChar.IsPlayer;
+            OutfitStudioChar.IsPlayer = () => true;
+        }
+    } else if (OutfitStudioSavedIsPlayer !== null) {
+        OutfitStudioChar.IsPlayer = OutfitStudioSavedIsPlayer;
+        OutfitStudioSavedIsPlayer = null;
+    }
+}
+
+// BC gates much of the extended-item UI on the real Player's CanInteract(), which is
+// just !HasEffect("Block") — false whenever you're wearing something that binds your
+// hands. That's the right rule when you're interacting with a character and the wrong
+// one in the Studio, where you're dressing a mannequin: being tied up in a chatroom
+// greyed out "Adjust Tightness" (ExtendedItem.js gates both its Draw and Click on it)
+// and made extended item options unchangeable.
+//
+// The Studio already clears the dummy's PermissionItems / LimitedItems / BlockItems for
+// exactly this reason; this is the last gate, and it sits on the Player rather than the
+// dummy so it can't be cleared the same way.
+//
+// Borrowed only around a dispatch into BC's extended-item code and always returned in a
+// finally, because unlike the IsPlayer borrow this touches the real Player object.
+function OutfitStudioBorrowCanInteract() {
+    if (OutfitStudioSavedCanInteract !== null) return;
+    if (!Player || typeof Player.CanInteract !== 'function') return;
+    OutfitStudioSavedCanInteract = Player.CanInteract;
+    Player.CanInteract = () => true;
+}
+
+function OutfitStudioReturnCanInteract() {
+    if (OutfitStudioSavedCanInteract === null) return;
+    Player.CanInteract = OutfitStudioSavedCanInteract;
+    OutfitStudioSavedCanInteract = null;
+}
+
 function OutfitStudioOpenAppearance() {
     if (!OutfitStudioChar) {
         return;
@@ -2335,6 +2485,9 @@ function OutfitStudioOpenAppearance() {
 
     // Set flag to allow CommonSetScreen to work
     OutfitStudioInAppearance = true;
+
+    // Let BC lay the screen out the way it does when you edit your own appearance.
+    OutfitStudioSetAppearanceIsPlayer(true);
 
     // Temporarily reset CharacterAppearanceForceUpCharacter to allow wardrobe characters to build properly
     // We'll restore it when we return to the Outfit Studio
@@ -2355,13 +2508,17 @@ function OutfitStudioOpenAppearance() {
 
             // Reset flag
             OutfitStudioInAppearance = false;
+            OutfitStudioSetAppearanceIsPlayer(false);
 
             // Restore CharacterAppearanceForceUpCharacter
             CharacterAppearanceForceUpCharacter = savedForceUpCharacter;
 
-            // Show DOM elements again
-            if (container) {
-                container.style.display = 'block';
+            // Re-query rather than reusing the reference captured on the way in: exiting
+            // the Studio while the appearance screen is open removes that element, and
+            // the stale node would be styled instead of the live one.
+            const liveContainer = document.getElementById('outfit-studio-container');
+            if (liveContainer) {
+                liveContainer.style.display = 'block';
             }
             OutfitStudioShowActionButtons(true);
 
@@ -2390,6 +2547,7 @@ function OutfitStudioOpenAppearance() {
         console.error('[Outfit Studio] CharacterAppearanceLoadCharacter function not available!');
         alert('Appearance editing is not available. Please make sure the game is fully loaded.');
         OutfitStudioInAppearance = false;
+        OutfitStudioSetAppearanceIsPlayer(false);
 
         // Restore CharacterAppearanceForceUpCharacter even on error
         CharacterAppearanceForceUpCharacter = savedForceUpCharacter;

@@ -124,6 +124,92 @@ function applyPadlockLogic(itemProperty, selectedPadlock, padlockConfigs) {
     return itemProperty;
 }
 
+// Is this character the player's own, for the purposes of saving/exporting appearance?
+//
+// True for the Player, and for scratch dummies BCOM creates from the player's own data
+// (the Outfit Studio preview), which are flagged with BCOMOwnDummy. Those dummies have no
+// MemberNumber and a non-zero ID, so the plain identity checks would classify them as
+// "someone else" and the anti-impersonation path would throw away the body/hair the user
+// just built and substitute the Player's current appearance.
+//
+// Deliberately NOT true for the BCX import temp character: an imported code can come from
+// another player, so substituting the player's own body there is the intended guard.
+function isPlayerOwnedCharacter(C) {
+    if (!C) return false;
+    if (C === Player) return true;
+    if (C.BCOMOwnDummy === true) return true;
+    if (typeof C.IsPlayer === 'function' && C.IsPlayer()) return true;
+    return C.MemberNumber === Player.MemberNumber;
+}
+
+// The single rule for "does this slot take the outfit's item, or keep what the character
+// already has?". Both applying an outfit and saving a filtered copy of one go through
+// this, so what you see in the preview is what a filtered copy saves.
+//
+// `exclusions` is the set of slots the user toggled away from its section default in
+// Appearance Options. Body is opt-in (in the set = apply it); every other section is
+// opt-out (in the set = keep mine).
+function makeShouldApplyGroup(C, exclusions, hairOnly) {
+    const isOwnCharacter = isPlayerOwnedCharacter(C);
+    return function shouldApplyGroup(name) {
+        if (!name) return false;
+        if (hairOnly && name !== "HairFront" && name !== "HairBack") return false;
+
+        const g = (typeof AssetGroup !== 'undefined' ? AssetGroup : []).find(gg => gg.Name === name);
+        const isAppearance = !!g && g.Category === "Appearance";
+        const isClothing = isAppearance && g.Clothing;
+
+        // Other players: only clothing + restraints (Item) may apply; appearance
+        // groups are left untouched so we never change someone else's character.
+        if (!isOwnCharacter && isAppearance && !isClothing) return false;
+
+        // Body is opt-in. An outfit shouldn't reshape the player's body — that data
+        // is kept mainly for backup/restore — so body slots apply only when the user
+        // unticks them in Appearance Options.
+        const isBody = isAppearance && !isClothing && !g.BodyCosplay
+            && !(name.startsWith("Hair") || name === "Beard");
+        const toggled = exclusions.has(name);
+        return isBody ? toggled : !toggled;
+    };
+}
+
+// Turn a worn item into the {Name, Group, Color, Property, Craft} shape outfits store.
+function serializeWornItem(item) {
+    if (!item || !item.Asset || !item.Asset.Name || !item.Asset.Group || !item.Asset.Group.Name) return null;
+    return {
+        Name: item.Asset.Name,
+        Group: item.Asset.Group.Name,
+        Color: Array.isArray(item.Color) ? [...item.Color] :
+               (typeof item.Color === "string" && item.Color !== "" &&
+                item.Color.toLowerCase() !== "default") ? item.Color : undefined,
+        // Tightness. Tighten/loosen writes item.Difficulty, a top-level field rather than
+        // something under Property, so leaving it out silently dropped it from every
+        // saved outfit. Same shape BC persists (ServerBundledItemFromAppearanceItem).
+        Difficulty: !item.Difficulty ? undefined : item.Difficulty,
+        Property: item.Property ? {...item.Property} : undefined,
+        Craft: item.Craft ? {...item.Craft} : undefined
+    };
+}
+
+// Restore a saved tightness onto a freshly worn item.
+//
+// The stored value is absolute (it already includes the asset's base difficulty), so it
+// is assigned rather than added. It is clamped to the range BC's own tighten/loosen menu
+// allows, because an outfit can arrive from a shared BCX code: without the clamp a code
+// could hand you a restraint tightened far past anything you could set by hand.
+function applySavedDifficulty(wornItem, savedDifficulty) {
+    if (!wornItem || !wornItem.Asset) return;
+    if (typeof savedDifficulty !== "number" || !isFinite(savedDifficulty)) return;
+
+    const bondage = (typeof SkillGetLevel === 'function') ? SkillGetLevel(Player, "Bondage") : 0;
+    const secure = wornItem.Craft?.Effects?.Secure ?? 0;
+    const max = bondage + 4 + (wornItem.Asset.Difficulty || 0) + secure * 4;
+    const min = (typeof TightenLoosenItemMinimumDifficulty === 'number')
+        ? TightenLoosenItemMinimumDifficulty : -10;
+
+    wornItem.Difficulty = Math.max(min, Math.min(max, savedDifficulty));
+}
+
 // Get sorted outfits and folders based on current context
 function getSortedOutfits() {
     const memberNumber = Player.MemberNumber;
@@ -331,10 +417,10 @@ function SaveOutfit(C, name = null) {
 
         // Two save paths:
         //   1. Filtered-copy mode — an outfit is checked (state.outfitToEdit) AND its
-        //      stored data exists. Save a copy of that outfit's saved data with the
-        //      user's X'd slots omitted, as a new named variant. Bakes the exclusions
-        //      in permanently for the new outfit. The source outfit and its exclusion
-        //      Set are untouched.
+        //      stored data exists. Save what applying that outfit would actually leave
+        //      you wearing: the outfit's item for every slot that applies, and your own
+        //      item for every slot you ticked to keep. That is exactly what the hover
+        //      preview shows. The source outfit and its exclusion Set are untouched.
         //   2. Normal mode — no outfit checked. Capture the character's current
         //      appearance, with anti-impersonation logic for non-own characters.
         let outfitData;
@@ -357,17 +443,45 @@ function SaveOutfit(C, name = null) {
                     ErrorHandler.showError("Source outfit data is invalid.");
                     return false;
                 }
-                outfitData = sourceItems.filter(item =>
-                    item && item.Group && item.Name && !sourceExclusions.has(item.Group)
-                );
+                // Merge, don't just subtract. Filtering the source down to "everything
+                // except the ticked slots" dropped the outfit's item for a ticked slot
+                // without putting yours in its place, so a slot you ticked to keep came
+                // out empty — and a slot you ticked that the outfit didn't cover was
+                // never added at all. Either way the thing you ticked wasn't saved.
+                const shouldApplyGroup = makeShouldApplyGroup(C, sourceExclusions, !!sourceOutfit.isHairOnly);
+
+                const outfitByGroup = new Map();
+                for (const item of sourceItems) {
+                    if (item && item.Group && item.Name) outfitByGroup.set(item.Group, item);
+                }
+
+                // Slots this outfit is about: the ones it already covers, plus any the
+                // user explicitly ticked. A slot that is neither is left out, so wearing
+                // unrelated restraints doesn't quietly fold them into the outfit.
+                const groups = new Set([...outfitByGroup.keys(), ...sourceExclusions]);
+
+                const wornByGroup = new Map();
+                for (const item of (Array.isArray(C.Appearance) ? C.Appearance : [])) {
+                    const groupName = item?.Asset?.Group?.Name;
+                    if (groupName) wornByGroup.set(groupName, item);
+                }
+
+                outfitData = [];
+                for (const groupName of groups) {
+                    if (shouldApplyGroup(groupName)) {
+                        const item = outfitByGroup.get(groupName);
+                        if (item) outfitData.push(item);
+                    } else {
+                        const kept = serializeWornItem(wornByGroup.get(groupName));
+                        if (kept) outfitData.push(kept);
+                    }
+                }
             } catch (decompressErr) {
                 ErrorHandler.showError("Failed to read source outfit for variant save.", decompressErr);
                 return false;
             }
         } else {
-            const isOwnCharacter = C === Player ||
-                (typeof C.IsPlayer === 'function' && C.IsPlayer()) ||
-                C.MemberNumber === Player.MemberNumber;
+            const isOwnCharacter = isPlayerOwnedCharacter(C);
 
             let itemsToSave;
             if (isOwnCharacter) {
@@ -392,17 +506,7 @@ function SaveOutfit(C, name = null) {
                 itemsToSave = [...playerBodyItems, ...otherClothingItems];
             }
 
-            outfitData = itemsToSave.filter(item =>
-                    item.Asset && item.Asset.Name && item.Asset.Group && item.Asset.Group.Name
-                ).map(item => ({
-                    Name: item.Asset.Name,
-                    Group: item.Asset.Group.Name,
-                    Color: Array.isArray(item.Color) ? [...item.Color] :
-                           (typeof item.Color === "string" && item.Color !== "" &&
-                            item.Color.toLowerCase() !== "default") ? item.Color : undefined,
-                    Property: item.Property ? {...item.Property} : undefined,
-                    Craft: item.Craft ? {...item.Craft} : undefined
-                }));
+            outfitData = itemsToSave.map(serializeWornItem).filter(Boolean);
         }
 
         if (outfitData.length === 0) {
@@ -512,6 +616,7 @@ function LoadOutfit(C, outfitName) {
                 Name: item.Name || item.name || item.AssetName || item.asset,
                 Group: item.Group || item.group || item.AssetGroup || item.Category,
                 Color: item.Color || item.color,
+                Difficulty: item.Difficulty ?? item.difficulty,
                 Property: item.Property || item.property,
                 Craft: item.Craft || item.craft
             };
@@ -535,36 +640,13 @@ function LoadOutfit(C, outfitName) {
         let hairOnlyApply = false;
         if (outfit.isHairOnly) hairOnlyApply = true;
 
-        // Who are we applying to? On another character we never impose appearance
-        // (body / hair / cosplay / face) — only clothing + restraints. On the player's
-        // own character, clothing / hair / cosplay / restraints apply by default; body
-        // is opt-in (see below).
-        const isOwnCharacter = C === Player ||
-            (typeof C.IsPlayer === 'function' && C.IsPlayer()) ||
-            C.MemberNumber === Player.MemberNumber;
-
-        const shouldApplyGroup = (name) => {
-            if (!name) return false;
-            if (hairOnlyApply && name !== "HairFront" && name !== "HairBack") return false;
-
-            const g = (typeof AssetGroup !== 'undefined' ? AssetGroup : []).find(gg => gg.Name === name);
-            const isAppearance = !!g && g.Category === "Appearance";
-            const isClothing = isAppearance && g.Clothing;
-
-            // Other players: only clothing + restraints (Item) may apply; appearance
-            // groups are left untouched so we never change someone else's character.
-            if (!isOwnCharacter && isAppearance && !isClothing) return false;
-
-            // Body is opt-in. An outfit shouldn't reshape the player's body — that data
-            // is kept mainly for backup/restore — so body slots apply only when the user
-            // ticks them in Appearance Options (the slot is in the exclusion set, which
-            // for body means "include"). Every other section applies by default and can
-            // be toggled off (the slot in the set means "exclude").
-            const isBody = isAppearance && !isClothing && !g.BodyCosplay
-                && !(name.startsWith("Hair") || name === "Beard");
-            const toggled = exclusions.has(name);
-            return isBody ? toggled : !toggled;
-        };
+        // Who are we applying to? makeShouldApplyGroup decides that: on another character
+        // we never impose appearance (body / hair / cosplay / face), only clothing and
+        // restraints. On the player's own character everything but body applies by
+        // default, and body is opt-in.
+        //
+        // Same rule the filtered-copy save uses, so the two can't drift apart.
+        const shouldApplyGroup = makeShouldApplyGroup(C, exclusions, hairOnlyApply);
 
         // Slots this apply will overwrite. Two contributors:
         //   1. Every Group present in outfit data (replaces matching slot on player).
@@ -659,6 +741,9 @@ function LoadOutfit(C, outfitName) {
                 // Now we only need to handle the padlock dropdown override
                 // and merge non-lock, non-craft properties from saved data.
 
+                // Tightness, if this outfit was saved with any.
+                applySavedDifficulty(wornItem, item.Difficulty);
+
                 // Determine lock handling
                 const padlockSetting = state.selectedPadlock || "Keep Original";
                 const savedLockType = item.Property?.LockedBy;
@@ -730,9 +815,7 @@ function getCurrentOutfitBCXCode(C, padlockOption = null) {
         
         // Same identity-preserving logic as SaveOutfit: use Player's body for other characters
         // to prevent BCOM from being an easy identity-copy tool for impersonating other players.
-        const isOwnCharacter = C === Player ||
-            (typeof C.IsPlayer === 'function' && C.IsPlayer()) ||
-            C.MemberNumber === Player.MemberNumber;
+        const isOwnCharacter = isPlayerOwnedCharacter(C);
 
         let itemsToProcess;
         if (isOwnCharacter) {
@@ -774,14 +857,11 @@ function getCurrentOutfitBCXCode(C, padlockOption = null) {
                     itemProperty = applyPadlockLogic(itemProperty, padlockSetting, state.padlockConfigs);
                 }
                 
+                // Same shape as a saved outfit, but with the padlock dropdown's Property
+                // substituted in.
                 return {
-                    Name: item.Asset.Name,
-                    Group: item.Asset.Group.Name,
-                    Color: Array.isArray(item.Color) ? [...item.Color] :
-                           (typeof item.Color === "string" && item.Color !== "" &&
-                            item.Color.toLowerCase() !== "default") ? item.Color : undefined,
-                    Property: itemProperty,
-                    Craft: item.Craft ? {...item.Craft} : undefined
+                    ...serializeWornItem(item),
+                    Property: itemProperty
                 };
             });
         
@@ -793,6 +873,87 @@ function getCurrentOutfitBCXCode(C, padlockOption = null) {
 }
 
 // Delete outfit function
+// Wipe every saved outfit and folder for this member.
+//
+// Irreversible and not undoable, so it is gated twice: the user has to type DELETE in
+// capitals, and then confirm again with a reminder to back up first. Either gate cancels
+// cleanly. `settings` is preserved — the version-update tracking and first-use flag are
+// not outfit data, and clearing them would make the addon behave like a fresh install.
+function DeleteAllOutfits() {
+    const memberNumber = Player.MemberNumber;
+    const storageKey = `${window.BCOM_Base.STORAGE_PREFIX}${memberNumber}`;
+
+    try {
+        const storageData = localStorage.getItem(storageKey);
+        const outfitStorage = storageData ? JSON.parse(storageData) : null;
+        const outfitCount = outfitStorage?.outfits?.length || 0;
+        const folders = (outfitStorage?.folders || []).filter(f => f !== "Main");
+        const folderCount = folders.length;
+
+        if (outfitCount === 0 && folderCount === 0) {
+            ShowOutfitNotification("There are no saved outfits or folders to delete");
+            return false;
+        }
+
+        const summary = `${outfitCount} outfit${outfitCount === 1 ? "" : "s"}`
+            + ` and ${folderCount} folder${folderCount === 1 ? "" : "s"}`;
+
+        // Gate 1 — type it out, so this can't happen on a stray click.
+        const typed = prompt(
+            `DELETE ALL SAVED OUTFITS\n\n`
+            + `This permanently erases ${summary}. It cannot be undone.\n\n`
+            + `If you have not backed up yet, cancel and use the Backup button first.\n\n`
+            + `Type  DELETE  in capitals to continue:`
+        );
+        if (typed === null) return false;
+        if (typed !== "DELETE") {
+            ShowOutfitNotification('Cancelled — you must type DELETE exactly, in capitals');
+            return false;
+        }
+
+        // Gate 2 — last chance, with the backup reminder again.
+        const confirmed = confirm(
+            `Last chance.\n\n`
+            + `${summary} will be permanently erased. There is no way to get them back.\n\n`
+            + `Cancel now if you want to export them first — the Backup button saves everything `
+            + `to a file, and Export mode copies individual outfits as codes.\n\n`
+            + `Click OK to delete everything.`
+        );
+        if (!confirmed) {
+            ShowOutfitNotification("Cancelled — nothing was deleted");
+            return false;
+        }
+
+        localStorage.setItem(storageKey, JSON.stringify({
+            outfits: [],
+            folders: ["Main"],
+            settings: outfitStorage?.settings || {}
+        }));
+
+        // Everything derived from the outfits that just stopped existing.
+        window.BCOM_Storage.clearPerformanceCaches();
+        window.BCOM_ModInitializer.setState({
+            currentFolder: "Main",
+            outfitToEdit: null,
+            selectedOutfits: [],
+            DialogOutfitPage: 0,
+            isFolderManagementMode: false,
+            isSortMode: false,
+            isExportMode: false,
+            outfitExclusions: new Map()
+        });
+        window.BCOM_OutfitStudio_EditMode = null;
+        window.BCOM_OutfitStudio_WorkInProgress = null;
+
+        ShowOutfitNotification(`Deleted ${summary}`);
+        return true;
+
+    } catch (error) {
+        ErrorHandler.showError("Failed to delete all outfits.", error);
+        return false;
+    }
+}
+
 function DeleteOutfit(outfitName) {
     const memberNumber = Player.MemberNumber;
     const storageKey = `${window.BCOM_Base.STORAGE_PREFIX}${memberNumber}`;
@@ -879,11 +1040,14 @@ function ImportBCXOutfit() {
                 continue;
             }
 
-            // Create appearance item
+            // Create appearance item. Craft must be carried over — SaveOutfit reads
+            // item.Craft off this object, so dropping it here loses the crafted name,
+            // description and craft lock for every imported item.
             const appearanceItem = {
                 Asset: asset,
                 Color: item.Color || "Default",
                 Property: item.Property || {},
+                Craft: item.Craft || null,
             };
 
             tempChar.Appearance.push(appearanceItem);
@@ -970,6 +1134,9 @@ function LoadOutfitFromData(C, outfitData) {
             );
 
             if (wornItem) {
+                // Tightness, if this outfit was saved with any.
+                applySavedDifficulty(wornItem, item.Difficulty);
+
                 // Restore saved lock if InventoryCraft didn't already apply one
                 const savedLockType = item.Property?.LockedBy;
                 if (savedLockType && !wornItem.Property?.LockedBy) {
@@ -1094,6 +1261,7 @@ if (typeof module !== 'undefined' && module.exports) {
         LoadOutfit,
         LoadOutfitFromData,
         DeleteOutfit,
+        DeleteAllOutfits,
         ImportBCXOutfit,
         ExportOutfit,
         getCurrentOutfitBCXCode,
@@ -1109,6 +1277,7 @@ window.BCOM_OutfitManager = {
     LoadOutfit,
     LoadOutfitFromData,
     DeleteOutfit,
+    DeleteAllOutfits,
     ImportBCXOutfit,
     ExportOutfit,
     getCurrentOutfitBCXCode,

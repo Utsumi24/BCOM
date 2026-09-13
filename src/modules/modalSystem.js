@@ -1,5 +1,14 @@
 // Modal system for padlock configuration
 
+// Escape a value before interpolating it into modal HTML (attribute or text content).
+function escapeModalValue(value) {
+    return String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/"/g, '&quot;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+}
+
 // Function to create a custom input modal with character counter
 function createInputModal(title, description, currentValue = "", maxLength = 140, placeholder = "", inputType = "textarea") {
     return new Promise((resolve) => {
@@ -43,7 +52,7 @@ function createInputModal(title, description, currentValue = "", maxLength = 140
                 font-size: 14px;
                 resize: vertical;
                 box-sizing: border-box;
-            " placeholder="${placeholder}">${currentValue}</textarea>` :
+            " placeholder="${escapeModalValue(placeholder)}">${escapeModalValue(currentValue)}</textarea>` :
             `<input type="text" id="modalInput" style="
                 width: 100%;
                 padding: 8px;
@@ -52,7 +61,7 @@ function createInputModal(title, description, currentValue = "", maxLength = 140
                 font-family: Arial, sans-serif;
                 font-size: 14px;
                 box-sizing: border-box;
-            " placeholder="${placeholder}" value="${currentValue}">`;
+            " placeholder="${escapeModalValue(placeholder)}" value="${escapeModalValue(currentValue)}">`;
         
         modal.innerHTML = `
             <h3 style="margin-top: 0; color: #333; font-family: Arial, sans-serif;">${title}</h3>
@@ -165,11 +174,18 @@ function createTimerModal(padlockType, currentConfig = {}) {
         let currentHours = 0; // Default to 0 hours
         let currentMinutes = 5; // Default to 5 minutes (BC default)
         
-        if (currentConfig.RemoveTimer && currentConfig.RemoveTimer > CurrentTime) {
-            const remainingMs = currentConfig.RemoveTimer - CurrentTime;
-            currentHours = Math.floor(remainingMs / (60 * 60 * 1000));
-            currentMinutes = Math.floor((remainingMs % (60 * 60 * 1000)) / (60 * 1000));
-            
+        // Prefill from the stored duration rather than RemoveTimer. RemoveTimer is an
+        // absolute timestamp that goes stale the moment it passes (the defaults in
+        // padlockConfigs are computed once at script load), so keying off it made the
+        // dialog reopen at 0h/5m even after the user had configured a longer timer.
+        const storedDurationMs = currentConfig.TimerDuration > 0
+            ? currentConfig.TimerDuration
+            : (currentConfig.RemoveTimer > CurrentTime ? currentConfig.RemoveTimer - CurrentTime : 0);
+
+        if (storedDurationMs > 0) {
+            currentHours = Math.floor(storedDurationMs / (60 * 60 * 1000));
+            currentMinutes = Math.floor((storedDurationMs % (60 * 60 * 1000)) / (60 * 1000));
+
             // Round minutes to nearest available option (5, 15, 30, 45)
             const availableMinutes = [0, 5, 15, 30, 45];
             currentMinutes = availableMinutes.reduce((prev, curr) => 
@@ -456,20 +472,21 @@ function createTimerModal(padlockType, currentConfig = {}) {
             resolve(result);
             document.body.removeChild(overlay);
         });
-        
+
+        // null means "cancelled" — the caller keeps the existing config untouched.
         cancelButton.addEventListener('click', () => {
-            resolve(currentConfig);
+            resolve(null);
             document.body.removeChild(overlay);
         });
-        
+
         // Close on overlay click
         overlay.addEventListener('click', (e) => {
             if (e.target === overlay) {
-                resolve(currentConfig);
+                resolve(null);
                 document.body.removeChild(overlay);
             }
         });
-        
+
         // Focus OK button
         okButton.focus();
     });
@@ -524,7 +541,7 @@ function createPasswordModal(padlockType, currentConfig = {}) {
                     font-family: Arial, sans-serif;
                     font-size: 14px;
                     box-sizing: border-box;
-                " placeholder="password" value="">
+                " placeholder="password" value="${escapeModalValue(currentConfig.Password || '')}">
                 <div id="passwordCounter" style="
                     margin-top: 5px;
                     color: #666;
@@ -545,7 +562,7 @@ function createPasswordModal(padlockType, currentConfig = {}) {
                     font-size: 14px;
                     resize: vertical;
                     box-sizing: border-box;
-                " placeholder="Take a guess..."></textarea>
+                " placeholder="Take a guess...">${escapeModalValue(currentConfig.Hint || '')}</textarea>
                 <div id="hintCounter" style="
                     margin-top: 5px;
                     color: #666;
@@ -693,11 +710,16 @@ function createTimerPasswordModal(padlockType, currentConfig = {}) {
         let currentHours = 0;
         let currentMinutes = 5;
         
-        if (currentConfig.RemoveTimer && currentConfig.RemoveTimer > CurrentTime) {
-            const remainingMs = currentConfig.RemoveTimer - CurrentTime;
-            currentHours = Math.floor(remainingMs / (60 * 60 * 1000));
-            currentMinutes = Math.floor((remainingMs % (60 * 60 * 1000)) / (60 * 1000));
-            
+        // See createTimerModal: prefill from the stored duration, not the absolute
+        // RemoveTimer timestamp, which is stale by the time the dialog reopens.
+        const storedDurationMs = currentConfig.TimerDuration > 0
+            ? currentConfig.TimerDuration
+            : (currentConfig.RemoveTimer > CurrentTime ? currentConfig.RemoveTimer - CurrentTime : 0);
+
+        if (storedDurationMs > 0) {
+            currentHours = Math.floor(storedDurationMs / (60 * 60 * 1000));
+            currentMinutes = Math.floor((storedDurationMs % (60 * 60 * 1000)) / (60 * 1000));
+
             // Round minutes to nearest available option
             const availableMinutes = [0, 5, 15, 30, 45];
             currentMinutes = availableMinutes.reduce((prev, curr) => 
@@ -769,7 +791,7 @@ function createTimerPasswordModal(padlockType, currentConfig = {}) {
                     font-family: Arial, sans-serif;
                     font-size: 14px;
                     box-sizing: border-box;
-                " placeholder="password" value="">
+                " placeholder="password" value="${escapeModalValue(currentConfig.Password || '')}">
                 <div id="passwordCounter" style="
                     margin-top: 5px;
                     color: #666;
@@ -790,7 +812,7 @@ function createTimerPasswordModal(padlockType, currentConfig = {}) {
                     font-size: 14px;
                     resize: vertical;
                     box-sizing: border-box;
-                " placeholder="Take a guess..."></textarea>
+                " placeholder="Take a guess...">${escapeModalValue(currentConfig.Hint || '')}</textarea>
                 <div id="hintCounter" style="
                     margin-top: 5px;
                     color: #666;
@@ -1032,20 +1054,21 @@ function createTimerPasswordModal(padlockType, currentConfig = {}) {
                 document.body.removeChild(overlay);
             }
         });
-        
+
+        // null means "cancelled" — the caller keeps the existing config untouched.
         cancelButton.addEventListener('click', () => {
-            resolve(currentConfig);
+            resolve(null);
             document.body.removeChild(overlay);
         });
-        
+
         // Close on overlay click
         overlay.addEventListener('click', (e) => {
             if (e.target === overlay) {
-                resolve(currentConfig);
+                resolve(null);
                 document.body.removeChild(overlay);
             }
         });
-        
+
         // Focus password field
         passwordInput.focus();
         passwordInput.setSelectionRange(passwordInput.value.length, passwordInput.value.length);
@@ -1058,9 +1081,10 @@ function createTimerPasswordModal(padlockType, currentConfig = {}) {
 // bakes the exclusions in, producing a filtered copy.
 //
 // Visual key:
-//   default row — slot included; yellow background if the outfit has an item there,
-//                 light grey if the slot is only currently occupied on the player
-//   X row (red) — excluded from this outfit's apply/save
+//   unticked row — the outfit decides this slot; yellow if the outfit has an item there,
+//                  light grey if the slot is only currently occupied on the player
+//   ticked row   — always green ✓ "keeping what you're wearing", whether or not the
+//                  outfit had an item to skip. One state, one colour, one meaning.
 //
 // Slots are filtered to the union of (groups in the outfit) and (groups currently
 // on the player) — empty-on-both slots are hidden to declutter the list.
@@ -1198,16 +1222,11 @@ function createAppearanceOptionsModal(character, outfitName, outfitData) {
 
         const escapeAttr = (s) => String(s).replace(/"/g, '&quot;').replace(/</g, '&lt;');
 
-        // One rule everywhere: a CHECKED (marked) box means "keep my current slot —
-        // leave it alone on apply." An empty box means the outfit's action happens.
-        //   • kept + outfit has an item:
-        //       body  → ✓ green "keep your body" (body is kept by default; opt in by
-        //               unchecking)
-        //       other → ✕ red "exclude" (you chose to skip the outfit's item)
-        //   • kept + only you have an item → ✓ green "keep" (it isn't removed on apply)
-        //   • not kept → empty box: yellow if the outfit fills the slot (it'll be applied),
-        //     grey if only you have one (it'll be removed).
-        const styleFor = (optIn, hasOutfitItem, kept) => {
+        // One rule everywhere: a TICKED box means "keep my current slot — leave it alone
+        // on apply", and always looks the same, green ✓. An empty box means the outfit's
+        // action happens: yellow if the outfit fills the slot (it'll be applied), grey if
+        // only you have one (it'll be removed).
+        const styleFor = (hasOutfitItem, kept) => {
             if (!kept) {
                 return {
                     bg: hasOutfitItem ? '#fff9c4' : '#eceff1',
@@ -1216,11 +1235,19 @@ function createAppearanceOptionsModal(character, outfitName, outfitData) {
                     markColor: '#999'
                 };
             }
-            if (hasOutfitItem && !optIn) {
-                return { bg: '#ffcdd2', border: '#c62828', mark: '✕', markColor: '#c62828' };
-            }
+            // A checked slot always means one thing — "keep what I'm wearing" — so it
+            // always looks the same. It used to turn red ✕ when the outfit happened to
+            // fill that slot, which read as a denial rather than as keeping your item,
+            // and made it look like there was no way to mix and match.
             return { bg: '#c8e6c9', border: '#2e7d32', mark: '✓', markColor: '#2e7d32' };
         };
+
+        // A slot the outfit doesn't fill, outside the clothing section, can't change:
+        // only clothing slots get cleared to match the outfit, so nothing removes this
+        // item and nothing replaces it. Toggling it does nothing, so render it as a
+        // read-only note rather than a grey "will be removed unless you check it" row.
+        const isNoOpSlot = (slot, hasOutfitItem) =>
+            !hasOutfitItem && slot.section !== 'clothing';
 
         const renderRow = (slot) => {
             const outfitItem = outfitMap[slot.name];
@@ -1228,47 +1255,52 @@ function createAppearanceOptionsModal(character, outfitName, outfitData) {
             const optIn = slot.section === 'body';
             const toggled = excluded.has(slot.name);
             const hasOutfitItem = !!outfitItem;
+            const noOp = isNoOpSlot(slot, hasOutfitItem);
             // Matches shouldApplyGroup: body applies only when opted in (in set); every
             // other section applies by default (out of set). kept = the inverse.
             const willApply = optIn ? toggled : !toggled;
             const kept = !willApply;
-            const s = styleFor(optIn, hasOutfitItem, kept);
+            const s = noOp
+                ? { bg: '#f5f5f5', border: '#e0e0e0', mark: '–', markColor: '#9e9e9e' }
+                : styleFor(hasOutfitItem, kept);
 
             const tipParts = [];
             if (outfitItem) tipParts.push(`Outfit: ${outfitItem}`);
             if (playerItem) tipParts.push(`Currently: ${playerItem}`);
             if (!tipParts.length) tipParts.push("Empty");
-            if (kept) {
+            if (noOp) {
+                tipParts.push("Kept — the outfit doesn't include this slot, so nothing changes here");
+            } else if (kept) {
                 if (optIn) {
                     tipParts.push("Keeping your body — uncheck to apply the outfit's version");
                 } else if (hasOutfitItem) {
-                    tipParts.push("Excluded — keeping what you're wearing, not the outfit's item");
+                    tipParts.push("Keeping what you're wearing — the outfit's item is skipped");
                 } else {
                     tipParts.push("Keeping your current item (it won't be removed on apply)");
                 }
             } else if (hasOutfitItem) {
                 tipParts.push("Will apply the outfit's item — check to keep yours instead");
-            } else if (slot.section === 'clothing') {
-                tipParts.push("Will be removed on apply — check to keep it");
             } else {
-                tipParts.push("Kept (the outfit doesn't include this slot)");
+                tipParts.push("Will be removed on apply — check to keep it");
             }
 
             return `
                 <div class="aopt-row" data-group="${escapeAttr(slot.name)}"
                     data-has-outfit="${hasOutfitItem ? '1' : '0'}"
                     data-optin="${optIn ? '1' : '0'}"
+                    data-noop="${noOp ? '1' : '0'}"
                     title="${escapeAttr(tipParts.join('\n'))}"
                     style="
                         display: flex; align-items: center; gap: 10px;
                         padding: 6px 10px; margin: 2px 0; border-radius: 4px;
-                        cursor: pointer; user-select: none;
+                        cursor: ${noOp ? 'default' : 'pointer'}; user-select: none;
+                        ${noOp ? 'opacity: 0.7;' : ''}
                         background: ${s.bg};
                         border: 1px solid ${s.border};
                     ">
                     <span class="aopt-mark" style="
                         display: inline-block; width: 18px; height: 18px;
-                        border: 2px solid #555; border-radius: 3px;
+                        border: 2px solid ${noOp ? '#ccc' : '#555'}; border-radius: 3px;
                         background: white; text-align: center;
                         font-weight: bold; font-size: 14px; line-height: 16px;
                         color: ${s.markColor};
@@ -1284,6 +1316,16 @@ function createAppearanceOptionsModal(character, outfitName, outfitData) {
         const rowsHTML = SECTION_ORDER.map(def => {
             const list = sectionSlots[def.key];
             if (!list.length) return '';
+            // "skip all" only governs the rows you can actually toggle, so a section made
+            // up entirely of inert rows gets no control at all rather than a dead one.
+            const hasToggleable = list.some(s => !isNoOpSlot(s, !!outfitMap[s.name]));
+            const skipAll = !hasToggleable ? '' : `
+                        <span class="aopt-section-toggle-wrap" title="Skip all in this section (keep what you're wearing)"
+                            style="display:inline-flex; align-items:center; gap:4px; font-weight:normal; font-size:11px; color:#546e7a; cursor:pointer;">
+                            skip all
+                            <input type="checkbox" class="aopt-section-toggle" data-section="${def.key}"
+                                style="width:14px; height:14px; cursor:pointer; margin:0;">
+                        </span>`;
             return `
                 <div class="aopt-section">
                     <div class="aopt-section-header" data-section="${def.key}" style="
@@ -1295,13 +1337,7 @@ function createAppearanceOptionsModal(character, outfitName, outfitData) {
                     ">
                         <span class="aopt-caret" style="display:inline-block; width:12px;">▼</span>
                         <span style="flex:1;">${escapeAttr(def.label)}</span>
-                        <span style="color:#78909c; font-weight:normal;">${list.length}</span>
-                        <span class="aopt-section-toggle-wrap" title="Skip all in this section (keep what you're wearing)"
-                            style="display:inline-flex; align-items:center; gap:4px; font-weight:normal; font-size:11px; color:#546e7a; cursor:pointer;">
-                            skip all
-                            <input type="checkbox" class="aopt-section-toggle" data-section="${def.key}"
-                                style="width:14px; height:14px; cursor:pointer; margin:0;">
-                        </span>
+                        <span style="color:#78909c; font-weight:normal;">${list.length}</span>${skipAll}
                     </div>
                     <div class="aopt-section-body" data-section-body="${def.key}">
                         ${list.map(renderRow).join('')}
@@ -1314,13 +1350,17 @@ function createAppearanceOptionsModal(character, outfitName, outfitData) {
         modal.innerHTML = `
             <h3 style="margin: 0 0 6px 0; color: #333;">${heading}</h3>
             <p style="color: #666; margin: 0 0 10px 0; font-size: 13px;">
-                A <b>checked</b> slot is kept as-is on apply; an <b>empty</b> one takes the outfit's action. Click a slot to toggle it:
-                <br><span style="color: #c9a300;">Yellow</span> = the outfit's item will be applied →
-                check it for <span style="color: #c62828;">✕ Exclude</span> (keep what you're wearing).
-                <br><span style="color: #607d8b;">Grey</span> = only you have an item here →
-                check it for <span style="color: #2e7d32;">✓ Keep</span> (otherwise it's removed on apply).
-                <br><b>Body</b> slots are <span style="color: #2e7d32;">✓ checked</span> (kept) by default so your body isn't changed →
-                uncheck one to apply the outfit's version. Use <b>skip all</b> on a section header to keep the whole section.
+                Tick any slot you want to <b>keep as you're wearing it</b> — it turns
+                <span style="color: #2e7d32;">✓ green</span>. Leave a slot empty and the outfit decides it.
+                That's how you mix and match: tick the pieces of your own outfit you want to hang on to,
+                leave the rest for the saved outfit to fill in.
+                <br><span style="color: #c9a300;">Yellow</span> = the outfit has an item here and will apply it.
+                <br><span style="color: #607d8b;">Grey</span> = a clothing slot only you have an item in, so it's
+                removed on apply unless you tick it.
+                <br><b>Body</b> slots start <span style="color: #2e7d32;">✓ ticked</span> so your body isn't changed →
+                untick one to apply the outfit's version. Use <b>skip all</b> on a section header to keep a whole section.
+                <br><span style="color: #9e9e9e;">Faded “–”</span> rows are kept no matter what — the outfit doesn't
+                include that slot and only clothing gets cleared, so there's nothing to choose.
             </p>
             <div id="aoptList" style="
                 flex: 1; overflow-y: auto;
@@ -1357,13 +1397,18 @@ function createAppearanceOptionsModal(character, outfitName, outfitData) {
         const cancelBtn = modal.querySelector('#aoptCancel');
         const doneBtn = modal.querySelector('#aoptDone');
 
+        // Inert rows (the outfit doesn't fill the slot and it isn't clothing) keep their
+        // read-only styling and are skipped by every toggle path.
+        const ROW_SEL = '.aopt-row:not([data-noop="1"])';
+
         function repaintRow(row) {
+            if (row.dataset.noop === '1') return;
             const group = row.dataset.group;
             const optIn = row.dataset.optin === '1';
             const hasOutfitItem = row.dataset.hasOutfit === '1';
             const toggled = excluded.has(group);
             const willApply = optIn ? toggled : !toggled;
-            const s = styleFor(optIn, hasOutfitItem, !willApply);
+            const s = styleFor(hasOutfitItem, !willApply);
             row.style.background = s.bg;
             row.style.borderColor = s.border;
             const mark = row.querySelector('.aopt-mark');
@@ -1379,7 +1424,7 @@ function createAppearanceOptionsModal(character, outfitName, outfitData) {
         // Skip all = mark every row in the section as kept; un-skip = let them apply.
         function setSectionSkip(key, skip) {
             const wantInSet = skip ? keptMeansInSet(key) : !keptMeansInSet(key);
-            list.querySelectorAll(`[data-section-body="${key}"] .aopt-row`).forEach(row => {
+            list.querySelectorAll(`[data-section-body="${key}"] ${ROW_SEL}`).forEach(row => {
                 if (wantInSet) excluded.add(row.dataset.group);
                 else excluded.delete(row.dataset.group);
                 repaintRow(row);
@@ -1392,7 +1437,9 @@ function createAppearanceOptionsModal(character, outfitName, outfitData) {
         function refreshSectionToggle(key) {
             const cb = list.querySelector(`.aopt-section-toggle[data-section="${key}"]`);
             if (!cb) return;
-            const rows = list.querySelectorAll(`[data-section-body="${key}"] .aopt-row`);
+            const rows = list.querySelectorAll(`[data-section-body="${key}"] ${ROW_SEL}`);
+            if (rows.length === 0) return; // no control is rendered for such a section
+
             let kept = 0;
             rows.forEach(row => {
                 const inSet = excluded.has(row.dataset.group);
@@ -1400,7 +1447,13 @@ function createAppearanceOptionsModal(character, outfitName, outfitData) {
             });
             if (kept === 0) { cb.checked = false; cb.indeterminate = false; }
             else if (kept === rows.length) { cb.checked = true; cb.indeterminate = false; }
-            else { cb.indeterminate = true; }
+            else {
+                // Mixed. Park `checked` at false as well as showing the dash, so that
+                // clicking a mixed box always means "skip all" rather than depending on
+                // whichever value it happened to be left at.
+                cb.checked = false;
+                cb.indeterminate = true;
+            }
         }
 
         list.addEventListener('click', (e) => {
@@ -1431,6 +1484,7 @@ function createAppearanceOptionsModal(character, outfitName, outfitData) {
 
             const row = e.target.closest('.aopt-row');
             if (!row) return;
+            if (row.dataset.noop === '1') return; // read-only: toggling it changes nothing
             const group = row.dataset.group;
             if (excluded.has(group)) excluded.delete(group);
             else excluded.add(group);
@@ -1444,7 +1498,7 @@ function createAppearanceOptionsModal(character, outfitName, outfitData) {
 
         clearBtn.addEventListener('click', () => {
             excluded.clear();
-            list.querySelectorAll('.aopt-row').forEach(repaintRow);
+            list.querySelectorAll(ROW_SEL).forEach(repaintRow);
             SECTION_ORDER.forEach(def => refreshSectionToggle(def.key));
         });
 
