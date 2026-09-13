@@ -24,6 +24,10 @@ function registerDialogHooks(modApi) {
                 return;
             }
 
+            // Every branch below reads CurrentCharacter. If it's been cleared while the
+            // mode is still "outfits", there's nothing to act on — hand off to BC.
+            if (!CurrentCharacter) return next(args);
+
             // Get modular references but use original variable names for minimal changes
             const state = window.BCOM_ModInitializer.getState();
             const outfits = window.BCOM_OutfitManager.getSortedOutfits();
@@ -301,6 +305,13 @@ function registerDialogHooks(modApi) {
                     selectedOutfits,
                     allowMultipleSelect
                 });
+                return;
+            }
+
+            // Delete All (only in folder management mode). Coordinates must match the
+            // DrawButton in uiComponents. The function does its own two-stage confirming.
+            if (isFolderManagementMode && MouseIn(1810, 860, 180, 50)) {
+                window.BCOM_OutfitManager.DeleteAllOutfits();
                 return;
             }
 
@@ -777,6 +788,22 @@ function registerDialogHooks(modApi) {
                             }
 
                             localStorage.setItem(storageKey, JSON.stringify(outfitStorage));
+
+                            // Both the checkbox selection and the Appearance Options map are
+                            // keyed by outfit name — carry them over, or the rename orphans
+                            // them and the outfit's slot choices silently stop applying.
+                            window.BCOM_ModInitializer.renameOutfitExclusions(outfit.name, newName);
+                            if (state.outfitToEdit === outfit.name) {
+                                window.BCOM_ModInitializer.setState({ outfitToEdit: newName });
+                                if (window.BCOM_OutfitStudio_EditMode
+                                    && window.BCOM_OutfitStudio_EditMode.outfitName === outfit.name) {
+                                    window.BCOM_OutfitStudio_EditMode.outfitName = newName;
+                                }
+                            } else if (existingOutfit && state.outfitToEdit === newName) {
+                                // The rename overwrote a different outfit that was checked.
+                                window.BCOM_ModInitializer.setState({ outfitToEdit: null });
+                            }
+
                             ShowOutfitNotification(`Outfit renamed to "${newName}"`);
 
                         } catch (error) {
@@ -823,6 +850,16 @@ function registerDialogHooks(modApi) {
                                     !(o.name === outfit.name && (o.folder || "Main") === currentFolder)
                                 );
                                 localStorage.setItem(storageKey, JSON.stringify(outfitStorage));
+                            }
+
+                            // Drop the checkbox selection and Appearance Options for an
+                            // outfit that no longer exists, otherwise the button stays
+                            // enabled and opens a modal for a missing outfit.
+                            window.BCOM_ModInitializer.clearOutfitExclusions(outfit.name);
+                            if (state.outfitToEdit === outfit.name) {
+                                window.BCOM_ModInitializer.setState({ outfitToEdit: null });
+                                window.BCOM_OutfitStudio_EditMode = null;
+                                window.BCOM_OutfitStudio_WorkInProgress = null;
                             }
 
                             ShowOutfitNotification(`Outfit "${outfit.name}" has been deleted`);
@@ -952,6 +989,12 @@ function restoreOutfits() {
 
         // Add to body
         document.body.appendChild(inputElement);
+
+        // Teardown state, wired up below the change handler.
+        let cleanedUp = false;
+        let cleanupInput = () => {};
+        let removeCancelListener = () => {};
+        let onWindowFocus = () => {};
 
         // Handle file selection with proper cleanup
         const removeChangeListener = window.BCOM_Utils.eventListenerManager.add(inputElement, 'change', function() {
@@ -1117,6 +1160,10 @@ function restoreOutfits() {
                         // Save to storage
                         localStorage.setItem(storageKey, JSON.stringify(finalOutfits));
 
+                        // A restore replaces the whole store, including outfit names that
+                        // may now point at different data — drop the memoised copies.
+                        window.BCOM_Storage.clearPerformanceCaches();
+
                         // Ensure current folder is valid
                         const state = window.BCOM_ModInitializer.getState();
                         if (!finalOutfits.folders.includes(state.currentFolder)) {
@@ -1134,13 +1181,34 @@ function restoreOutfits() {
                 reader.readAsText(file);
             }
 
-            // Clean up listeners and remove the input element
-            removeChangeListener();
-            if (window.BCOM_Utils.eventListenerManager.removeAllForElement) {
-                window.BCOM_Utils.eventListenerManager.removeAllForElement(inputElement);
-            }
-            document.body.removeChild(inputElement);
+            cleanupInput();
         });
+
+        // The 'change' event never fires if the user dismisses the OS file picker, which
+        // would leave the hidden input and its listener in the DOM for good. 'cancel' covers
+        // browsers that support it; the focus fallback covers the rest. Both are one-shot
+        // and cleanupInput is idempotent, so whichever arrives first wins.
+        cleanupInput = () => {
+            if (cleanedUp) return;
+            cleanedUp = true;
+            removeChangeListener();
+            removeCancelListener();
+            window.removeEventListener('focus', onWindowFocus);
+            if (inputElement.parentNode) {
+                document.body.removeChild(inputElement);
+            }
+        };
+
+        removeCancelListener = window.BCOM_Utils.eventListenerManager.add(
+            inputElement, 'cancel', () => cleanupInput()
+        );
+
+        // Fire one frame after the window regains focus, so a 'change' from a real
+        // selection (which lands first) gets to run before we tear the element down.
+        onWindowFocus = () => setTimeout(() => {
+            if (!inputElement.files || inputElement.files.length === 0) cleanupInput();
+        }, 300);
+        window.addEventListener('focus', onWindowFocus, { once: true });
 
         // Trigger file selection dialog
         inputElement.click();
@@ -1150,17 +1218,19 @@ function restoreOutfits() {
     }
 }
 
-function ShowOutfitNotification(message) {
-    window.BCOM_Utils.ShowOutfitNotification(message);
-}
+// NOTE: this file deliberately does NOT define its own ShowOutfitNotification. The bare
+// calls above resolve to the one declared in core/utils.js, which loads first. A local
+// wrapper here used to shadow it, which worked only by accident of load order — and broke
+// outright when the sources are concatenated into one script, because function
+// declarations hoist to the top of the whole script, so utils.js's export object captured
+// the wrapper and the wrapper then called itself. See build/bundle.js.
 
 // Export for module system
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = {
         registerDialogHooks,
         backupOutfits,
-        restoreOutfits,
-        ShowOutfitNotification
+        restoreOutfits
     };
 }
 
@@ -1168,6 +1238,5 @@ if (typeof module !== 'undefined' && module.exports) {
 window.BCOM_DialogHandlers = {
     registerDialogHooks,
     backupOutfits,
-    restoreOutfits,
-    ShowOutfitNotification
+    restoreOutfits
 };

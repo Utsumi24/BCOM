@@ -67,8 +67,13 @@ function getUIConstants() {
 
 // Main outfit menu drawing function (copied from working original)
 function DrawOutfitMenu() {
+    // The whole menu is drawn around CurrentCharacter. If the dialog mode is still
+    // "outfits" but the character has been cleared (e.g. another screen took over
+    // mid-transition), bail rather than throwing on every frame.
+    if (!CurrentCharacter) return;
+
     const state = window.BCOM_ModInitializer.getState();
-    
+
     // Create/update import text field with caching
     const importId = "OutfitManagerImport";
     let importElement = document.getElementById(importId);
@@ -140,15 +145,18 @@ function DrawOutfitMenu() {
         if (!checkedOutfit) {
             label = "Appearance Options";
             color = "#cccccc";
-            tip = "Tick an outfit's checkbox first, then exclude any slots you want to keep as-is";
+            tip = "Tick an outfit's checkbox first, then choose which slots it applies";
         } else if (exclusionCount > 0) {
+            // The count is "slots changed from their section default" — it covers both
+            // excluded slots and body slots opted IN, which are opposite actions. Calling
+            // it "excluded" told the user the reverse of what they'd done to a body slot.
             label = `Appearance (${exclusionCount})`;
             color = "#ffcdd2";
-            tip = `${exclusionCount} slot(s) excluded from "${checkedOutfit}"`;
+            tip = `${exclusionCount} slot(s) changed from the default for "${checkedOutfit}"`;
         } else {
             label = "Appearance Options";
             color = "White";
-            tip = `Configure which slots of "${checkedOutfit}" to exclude on apply`;
+            tip = `Choose which slots of "${checkedOutfit}" apply, and which are kept as-is`;
         }
         DrawButton(1810, 437, 180, 50, label, color, "", tip);
         // Padlock Replacement dropdown — shifted down to leave room for button
@@ -172,6 +180,11 @@ function DrawOutfitMenu() {
         if (state.selectedOutfits.length > 0) {
             DrawButton(1680, 180, 90, 60, "Move", "Yellow");
         }
+        // Delete All lives in the empty stretch of the right rail, below the Padlocks
+        // dropdown and above the version text. Folder-management only, so an irreversible
+        // action isn't sitting on screen while you're just applying outfits.
+        DrawButton(1810, 860, 180, 50, "Delete All", "#ff8a80", "",
+            "Permanently delete every saved outfit and folder");
     }
 
     // Draw the center button with different text based on mode - back to original position
@@ -833,10 +846,11 @@ function truncateFolderName(folderName, maxLength) {
     return folderName.substring(0, maxLength - 3) + "...";
 }
 
-// Use outfit manager functions
-function getCurrentOutfitBCXCode(character, padlock) {
-    return window.BCOM_OutfitManager.getCurrentOutfitBCXCode(character, padlock);
-}
+// NOTE: no local getCurrentOutfitBCXCode wrapper here — the bare calls above resolve to the
+// one declared in modules/outfitManager.js, which loads first. A wrapper used to shadow it,
+// which worked only by accident of load order and self-recursed once the sources are
+// concatenated into one script (function declarations hoist script-wide, so
+// outfitManager's export object captured the wrapper). See build/bundle.js.
 
 async function configurePadlockProperties(padlockType) {
     const state = window.BCOM_ModInitializer.getState();
@@ -844,13 +858,17 @@ async function configurePadlockProperties(padlockType) {
     
     const config = {...state.padlockConfigs[padlockType]};
     let configChanged = false;
-    
+
+    // Every branch below treats a null result as "user cancelled" and leaves `config`
+    // untouched, so re-opening a dialog and backing out keeps whatever was configured
+    // before. (Overwriting with hardcoded defaults here used to silently reset a saved
+    // combination to 0000 / a saved password to "password".)
     switch(padlockType) {
         case "CombinationPadlock":
             const combo = await window.BCOM_ModalSystem.createInputModal(
-                "Combination Padlock", 
+                "Combination Padlock",
                 "Enter a 4-digit combination (numbers only)",
-                "", // Empty current value so it shows as placeholder
+                config.CombinationNumber || "",
                 4,
                 "0000",
                 "input"
@@ -860,58 +878,31 @@ async function configurePadlockProperties(padlockType) {
                 const validCombo = combo.replace(/\D/g, '').padStart(4, '0').slice(0, 4);
                 config.CombinationNumber = validCombo;
                 configChanged = true;
-            } else {
-                // User cancelled - ensure we have defaults
-                config.CombinationNumber = "0000";
-                configChanged = true;
             }
             break;
-            
+
         case "PasswordPadlock":
         case "SafewordPadlock":
             const passwordResult = await window.BCOM_ModalSystem.createPasswordModal(padlockType, config);
             if (passwordResult !== null) {
                 Object.assign(config, passwordResult);
                 configChanged = true;
-            } else {
-                // User cancelled - set defaults
-                config.Password = "password";
-                config.Hint = "Take a guess...";
-                configChanged = true;
             }
             break;
-            
+
         case "TimerPasswordPadlock":
             const timerPasswordResult = await window.BCOM_ModalSystem.createTimerPasswordModal(padlockType, config);
             if (timerPasswordResult !== null) {
                 Object.assign(config, timerPasswordResult);
                 configChanged = true;
-            } else {
-                // User cancelled - set all defaults
-                config.Password = "password";
-                config.Hint = "Take a guess...";
-                config.RemoveTimer = CurrentTime + (5 * 60 * 1000);
-                config.TimerDuration = 5 * 60 * 1000;
-                config.RemoveItem = true; // Default to true for timer padlocks
-                config.EnableRandomInput = false;
-                config.ShowTimer = true;
-                configChanged = true;
             }
             break;
-            
+
         case "MistressTimerPadlock":
         case "LoversTimerPadlock":
             const timerModalResult = await window.BCOM_ModalSystem.createTimerModal(padlockType, config);
             if (timerModalResult !== null) {
                 Object.assign(config, timerModalResult);
-                configChanged = true;
-            } else {
-                // User cancelled - use defaults
-                config.RemoveTimer = CurrentTime + (5 * 60 * 1000);
-                config.TimerDuration = 5 * 60 * 1000;
-                config.RemoveItem = true; // Default to true for timer padlocks
-                config.EnableRandomInput = false;
-                config.ShowTimer = true;
                 configChanged = true;
             }
             break;
@@ -955,12 +946,12 @@ function registerHooks(modApi) {
 
         return next(args);
     });
-    
-    // Register dialog click handlers
-    if (window.BCOM_DialogHandlers) {
-        window.BCOM_DialogHandlers.registerDialogHooks(modApi);
-    }
-    
+
+    // Note: dialog hooks are registered once at the top of this function. Registering
+    // them again here put a second copy of the DialogClick / DialogChangeMode hooks in
+    // the SDK chain, so every unhandled click re-ran the whole BCOM hit-test pass
+    // (including getSortedOutfits, which re-parses localStorage) before reaching BC.
+
     // Hook DrawCharacter to handle character preview (from original)
     modApi.hookFunction("DrawCharacter", 4, (args, next) => {
         const [C] = args;
