@@ -39,6 +39,11 @@ function applyLockToItem(C, wornItem, lockType, padlockConfigs) {
         if (padlockConfigs[lockType].Hint) {
             wornItem.Property.Hint = padlockConfigs[lockType].Hint;
         }
+        // BC decides whether a password lock is "set" via InventoryItemMiscPasswordPadlockIsSet:
+        //     Property.LockSet || (LockMemberNumber is a number && !== Player.MemberNumber)
+        // We lock as the Player, so without LockSet the lock reads as unset and BC shows the
+        // "choose a password" screen instead of the locked one -- the password looked ignored.
+        wornItem.Property.LockSet = true;
     } else if (lockType === "MistressTimerPadlock" || lockType === "LoversTimerPadlock") {
         const timerConfig = padlockConfigs[lockType];
         if (timerConfig.TimerDuration > 0) {
@@ -57,6 +62,9 @@ function applyLockToItem(C, wornItem, lockType, padlockConfigs) {
         if (config.Hint) {
             wornItem.Property.Hint = config.Hint;
         }
+        // TimerPasswordPadlock reuses InventoryItemMiscPasswordPadlockIsSet, so it needs
+        // LockSet for the same reason as the plain password lock above.
+        wornItem.Property.LockSet = true;
         if (config.TimerDuration > 0) {
             wornItem.Property.RemoveTimer = CurrentTime + config.TimerDuration;
         }
@@ -93,6 +101,8 @@ function applyPadlockLogic(itemProperty, selectedPadlock, padlockConfigs) {
             if (padlockConfigs[selectedPadlock].Hint) {
                 itemProperty.Hint = padlockConfigs[selectedPadlock].Hint;
             }
+            // See applyLockToItem: without LockSet, BC treats the lock as not yet configured.
+            itemProperty.LockSet = true;
         } else if (selectedPadlock === "MistressTimerPadlock" || selectedPadlock === "LoversTimerPadlock") {
             const timerConfig = padlockConfigs[selectedPadlock];
             if (timerConfig.TimerDuration > 0) {
@@ -109,6 +119,7 @@ function applyPadlockLogic(itemProperty, selectedPadlock, padlockConfigs) {
             const config = padlockConfigs.TimerPasswordPadlock;
             itemProperty.Password = config.Password;
             if (config.Hint) itemProperty.Hint = config.Hint;
+            itemProperty.LockSet = true;
             if (config.TimerDuration > 0) {
                 itemProperty.RemoveTimer = CurrentTime + config.TimerDuration;
             }
@@ -765,6 +776,9 @@ function LoadOutfit(C, outfitName) {
                     InventoryLock(C, wornItem, savedLockType, item.Property.LockMemberNumber || Player.MemberNumber, false);
                     if (item.Property.Password) wornItem.Property.Password = item.Property.Password;
                     if (item.Property.Hint) wornItem.Property.Hint = item.Property.Hint;
+                    // Without this a restored password lock reads as unconfigured and BC
+                    // reopens the "choose a password" screen instead of the locked one.
+                    if (item.Property.LockSet != null) wornItem.Property.LockSet = item.Property.LockSet;
                     if (item.Property.CombinationNumber) wornItem.Property.CombinationNumber = item.Property.CombinationNumber;
                     if (item.Property.RemoveTimer) wornItem.Property.RemoveTimer = item.Property.RemoveTimer;
                     if (item.Property.ShowTimer != null) wornItem.Property.ShowTimer = item.Property.ShowTimer;
@@ -1143,6 +1157,9 @@ function LoadOutfitFromData(C, outfitData) {
                     InventoryLock(C, wornItem, savedLockType, item.Property.LockMemberNumber || Player.MemberNumber, false);
                     if (item.Property.Password) wornItem.Property.Password = item.Property.Password;
                     if (item.Property.Hint) wornItem.Property.Hint = item.Property.Hint;
+                    // Without this a restored password lock reads as unconfigured and BC
+                    // reopens the "choose a password" screen instead of the locked one.
+                    if (item.Property.LockSet != null) wornItem.Property.LockSet = item.Property.LockSet;
                     if (item.Property.CombinationNumber) wornItem.Property.CombinationNumber = item.Property.CombinationNumber;
                     if (item.Property.RemoveTimer) wornItem.Property.RemoveTimer = item.Property.RemoveTimer;
                     if (item.Property.ShowTimer != null) wornItem.Property.ShowTimer = item.Property.ShowTimer;
