@@ -2,6 +2,11 @@
 
 Any changes made to the addon will be here for easier documentation.
 
+## [v0.8.4.3]
+- Fixed the Outfit Studio's item list appearing over the wardrobe screen after changing an clothing item's layering
+- Fixed the Password/TimerPassword padlocks not properly setting an inputted password in the Outfit Manager's padlock dropdown menu
+	- Added a randomize button to randomize a password/combination for Password/Combo locks
+
 ## [v0.8.4.2]
 - Fixed the Outfit Studio not saving body, hair or cosplay changes.  Anything done with "Change Appearance" was getting replaced with your current appearance on save
 - Fixed "Copy BCX Code" in the Outfit Studio putting a broken padlock on every item, which errored out when the code was imported
@@ -23,8 +28,6 @@ Any changes made to the addon will be here for easier documentation.
 - Tighten/loosen adjustments are now saved with an outfit and restored when you apply it, including in exported codes
 - The Outfit Studio no longer restricts you based on what you're wearing outside it.  Being bound in a chatroom was greying out "Adjust Tightness" and locking extended item options
 - Added a "Delete All" button in Folder Management to wipe every saved outfit and folder.  You have to type DELETE in capitals and then confirm a second time, and it reminds you to back up first
-
-
 
 ## [v0.8.4.1]
 - Changed how the Body category applies. Body slots (skin, face, eyes, etc.) are now kept as-is by default when you apply an outfit, so applying an outfit no longer changes your character's body. The body data is still saved with every outfit for backup/restore — you just opt in to applying it. (Note: outfits only ever store your own body, never another player's, so this is purely about not overwriting your current body with an older saved version.)

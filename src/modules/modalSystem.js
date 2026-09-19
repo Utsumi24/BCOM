@@ -9,8 +9,56 @@ function escapeModalValue(value) {
         .replace(/>/g, '&gt;');
 }
 
+// ---------------------------------------------------------------------------------
+// Random value generation for the padlock "Randomize" buttons
+// ---------------------------------------------------------------------------------
+
+// BC only accepts A-Z for a password (InventoryItemMiscPasswordPadlockPasswordRegex is
+// /^[A-Z]+$/), and BCOM's modals accept 4-8 of them. Rather than ship a word list, build
+// pronounceable nonsense out of consonant+vowel syllables: unguessable, but still easy to
+// read out to a keyholder or type from memory.
+//
+// C, H, J, Q, W, X and Y are left out -- they either need a following letter to sound
+// right (Q), or are the ones people mishear and mistype (C/K/S, J/G).
+const BCOM_RandomConsonants = "BDFGKLMNPRSTVZ";
+const BCOM_RandomVowels = "AEIOU";
+
+function randomFrom(characters) {
+    return characters[Math.floor(Math.random() * characters.length)];
+}
+
+// 4-7 letters: two or three consonant+vowel pairs, half the time closed with a consonant.
+function generateRandomPassword() {
+    const pairs = 2 + Math.floor(Math.random() * 2);
+    let out = "";
+    for (let i = 0; i < pairs; i++) {
+        out += randomFrom(BCOM_RandomConsonants) + randomFrom(BCOM_RandomVowels);
+    }
+    if (Math.random() < 0.5) out += randomFrom(BCOM_RandomConsonants);
+    return out;
+}
+
+// 0000-9999, leading zeros preserved -- BC stores the combination as a 4-character string.
+function generateRandomCombination() {
+    return Math.floor(Math.random() * 10000).toString().padStart(4, '0');
+}
+
+// Shared styling for the Randomize buttons so they match across all three modals.
+const BCOM_RandomButtonStyle = `
+    padding: 8px 12px;
+    background: #f0f0f0;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    cursor: pointer;
+    font-family: Arial, sans-serif;
+    font-size: 13px;
+    white-space: nowrap;
+`;
+
 // Function to create a custom input modal with character counter
-function createInputModal(title, description, currentValue = "", maxLength = 140, placeholder = "", inputType = "textarea") {
+// `randomize`, when given, adds a Randomize button that fills the field with its return
+// value. Only the combination padlock passes it, so every other caller is unaffected.
+function createInputModal(title, description, currentValue = "", maxLength = 140, placeholder = "", inputType = "textarea", randomize = null) {
     return new Promise((resolve) => {
         // Create modal overlay
         const overlay = document.createElement('div');
@@ -70,6 +118,7 @@ function createInputModal(title, description, currentValue = "", maxLength = 140
             <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 10px; flex-wrap: wrap;">
                 <span id="charCounter" style="color: #666; font-size: 12px; font-family: Arial, sans-serif;">0 / ${maxLength} characters</span>
                 <div style="margin-top: 5px;">
+                    ${randomize ? `<button id="modalRandom" style="${BCOM_RandomButtonStyle} margin-right: 8px;">Randomize</button>` : ''}
                     <button id="hintCancel" style="
                         padding: 10px 16px;
                         margin-right: 8px;
@@ -126,7 +175,17 @@ function createInputModal(title, description, currentValue = "", maxLength = 140
         
         // Event listeners
         inputField.addEventListener('input', updateCounter);
-        
+
+        const randomButton = modal.querySelector('#modalRandom');
+        if (randomButton) {
+            randomButton.addEventListener('click', () => {
+                inputField.value = randomize();
+                updateCounter();
+                inputField.focus();
+                inputField.setSelectionRange(inputField.value.length, inputField.value.length);
+            });
+        }
+
         okButton.addEventListener('click', () => {
             if (inputField.value.length <= maxLength) {
                 resolve(inputField.value);
@@ -532,16 +591,20 @@ function createPasswordModal(padlockType, currentConfig = {}) {
             </p>
             
             <div style="margin-bottom: 15px;">
-                <label style="display: block; margin-bottom: 5px; font-weight: bold; color: #333;">Password (4-8 characters):</label>
-                <input type="text" id="passwordInput" style="
-                    width: 100%;
-                    padding: 8px;
-                    border: 2px solid #ddd;
-                    border-radius: 4px;
-                    font-family: Arial, sans-serif;
-                    font-size: 14px;
-                    box-sizing: border-box;
-                " placeholder="password" value="${escapeModalValue(currentConfig.Password || '')}">
+                <label style="display: block; margin-bottom: 5px; font-weight: bold; color: #333;">Password (4-8 letters):</label>
+                <div style="display: flex; gap: 8px; align-items: stretch;">
+                    <input type="text" id="passwordInput" style="
+                        flex: 1;
+                        padding: 8px;
+                        border: 2px solid #ddd;
+                        border-radius: 4px;
+                        font-family: Arial, sans-serif;
+                        font-size: 14px;
+                        text-transform: uppercase;
+                        box-sizing: border-box;
+                    " placeholder="PASSWORD" value="${escapeModalValue(currentConfig.Password || '')}">
+                    <button id="passwordRandom" style="${BCOM_RandomButtonStyle}">Randomize</button>
+                </div>
                 <div id="passwordCounter" style="
                     margin-top: 5px;
                     color: #666;
@@ -549,7 +612,7 @@ function createPasswordModal(padlockType, currentConfig = {}) {
                     font-family: Arial, sans-serif;
                 ">0 / 8 characters</div>
             </div>
-            
+
             <div style="margin-bottom: 20px;">
                 <label style="display: block; margin-bottom: 5px; font-weight: bold; color: #333;">Hint (optional, max 140 characters):</label>
                 <textarea id="hintInput" style="
@@ -570,7 +633,7 @@ function createPasswordModal(padlockType, currentConfig = {}) {
                     font-family: Arial, sans-serif;
                 ">0 / 140 characters</div>
             </div>
-            
+
             <div style="display: flex; justify-content: flex-end; gap: 10px;">
                 <button id="passwordCancel" style="
                     padding: 10px 16px;
@@ -606,18 +669,20 @@ function createPasswordModal(padlockType, currentConfig = {}) {
         const okButton = modal.querySelector('#passwordOk');
         const cancelButton = modal.querySelector('#passwordCancel');
         
-        // Update password counter and validation
+        // Update password counter and validation.
+        //
+        // BC compares ElementValue("Password").toUpperCase() against Property.Password, so
+        // a password stored with any lowercase in it can never be entered -- the lock
+        // becomes unopenable. BC also only accepts letters (/^[A-Z]+$/). Enforce both here.
         function updatePasswordCounter() {
-            const length = passwordInput.value.length;
-            passwordCounter.textContent = `${length} / 8 characters`;
-            
-            if (length < 4) {
-                passwordCounter.style.color = '#dc3545';
-                passwordInput.style.borderColor = '#dc3545';
-                okButton.disabled = true;
-                okButton.style.opacity = '0.5';
-                okButton.style.cursor = 'not-allowed';
-            } else if (length > 8) {
+            const value = passwordInput.value;
+            const length = value.length;
+            const lettersOnly = /^[A-Za-z]*$/.test(value);
+            passwordCounter.textContent = lettersOnly
+                ? `${length} / 8 characters`
+                : `${length} / 8 - letters only (A-Z)`;
+
+            if (length < 4 || length > 8 || !lettersOnly) {
                 passwordCounter.style.color = '#dc3545';
                 passwordInput.style.borderColor = '#dc3545';
                 okButton.disabled = true;
@@ -655,13 +720,24 @@ function createPasswordModal(padlockType, currentConfig = {}) {
         passwordInput.addEventListener('input', updatePasswordCounter);
         hintInput.addEventListener('input', updateHintCounter);
         
+        const randomButton = modal.querySelector('#passwordRandom');
+        randomButton.addEventListener('click', () => {
+            passwordInput.value = generateRandomPassword();
+            updatePasswordCounter();
+            passwordInput.focus();
+            passwordInput.setSelectionRange(passwordInput.value.length, passwordInput.value.length);
+        });
+
         okButton.addEventListener('click', () => {
-            const password = passwordInput.value.trim();
+            // Uppercased on the way out: BC uppercases whatever the unlocker types before
+            // comparing, so anything stored with lowercase in it could never be opened.
+            const password = passwordInput.value.trim().toUpperCase();
             const hint = hintInput.value.trim();
-            
-            if (password.length >= 4 && password.length <= 8 && hint.length <= 140) {
+
+            if (password.length >= 4 && password.length <= 8
+                && /^[A-Z]+$/.test(password) && hint.length <= 140) {
                 const result = {
-                    Password: password || "password",
+                    Password: password,
                     Hint: hint || "Take a guess..."
                 };
                 resolve(result);
@@ -782,16 +858,20 @@ function createTimerPasswordModal(padlockType, currentConfig = {}) {
             </p>
             
             <div style="margin-bottom: 15px;">
-                <label style="display: block; margin-bottom: 5px; font-weight: bold; color: #333;">Password (4-8 characters):</label>
-                <input type="text" id="passwordInput" style="
-                    width: 100%;
-                    padding: 8px;
-                    border: 2px solid #ddd;
-                    border-radius: 4px;
-                    font-family: Arial, sans-serif;
-                    font-size: 14px;
-                    box-sizing: border-box;
-                " placeholder="password" value="${escapeModalValue(currentConfig.Password || '')}">
+                <label style="display: block; margin-bottom: 5px; font-weight: bold; color: #333;">Password (4-8 letters):</label>
+                <div style="display: flex; gap: 8px; align-items: stretch;">
+                    <input type="text" id="passwordInput" style="
+                        flex: 1;
+                        padding: 8px;
+                        border: 2px solid #ddd;
+                        border-radius: 4px;
+                        font-family: Arial, sans-serif;
+                        font-size: 14px;
+                        text-transform: uppercase;
+                        box-sizing: border-box;
+                    " placeholder="PASSWORD" value="${escapeModalValue(currentConfig.Password || '')}">
+                    <button id="passwordRandom" style="${BCOM_RandomButtonStyle}">Randomize</button>
+                </div>
                 <div id="passwordCounter" style="
                     margin-top: 5px;
                     color: #666;
@@ -799,7 +879,7 @@ function createTimerPasswordModal(padlockType, currentConfig = {}) {
                     font-family: Arial, sans-serif;
                 ">0 / 8 characters</div>
             </div>
-            
+
             <div style="margin-bottom: 15px;">
                 <label style="display: block; margin-bottom: 5px; font-weight: bold; color: #333;">Hint (optional, max 140 characters):</label>
                 <textarea id="hintInput" style="
@@ -919,24 +999,25 @@ function createTimerPasswordModal(padlockType, currentConfig = {}) {
         const okButton = modal.querySelector('#timerPasswordOk');
         const cancelButton = modal.querySelector('#timerPasswordCancel');
         
-        // Update password counter and validation
+        // Update password counter and validation.
+        // See createPasswordModal: BC uppercases the entered password before comparing and
+        // only accepts letters, so anything else produces a lock nobody can open.
         function updatePasswordCounter() {
-            const length = passwordInput.value.length;
-            passwordCounter.textContent = `${length} / 8 characters`;
-            
-            if (length < 4) {
+            const value = passwordInput.value;
+            const length = value.length;
+            const lettersOnly = /^[A-Za-z]*$/.test(value);
+            passwordCounter.textContent = lettersOnly
+                ? `${length} / 8 characters`
+                : `${length} / 8 - letters only (A-Z)`;
+
+            if (length < 4 || length > 8 || !lettersOnly) {
                 passwordCounter.style.color = '#dc3545';
                 passwordInput.style.borderColor = '#dc3545';
-                updateOkButton();
-            } else if (length > 8) {
-                passwordCounter.style.color = '#dc3545';
-                passwordInput.style.borderColor = '#dc3545';
-                updateOkButton();
             } else {
                 passwordCounter.style.color = '#28a745';
                 passwordInput.style.borderColor = '#28a745';
-                updateOkButton();
             }
+            updateOkButton();
         }
         
         // Update hint counter
@@ -981,8 +1062,9 @@ function createTimerPasswordModal(padlockType, currentConfig = {}) {
             const minutes = parseInt(minutesSelect.value);
             
             const totalMinutes = hours * 60 + minutes;
-            const isValid = passwordLength >= 4 && passwordLength <= 8 && 
-                           hintLength <= 140 && 
+            const isValid = passwordLength >= 4 && passwordLength <= 8 &&
+                           /^[A-Za-z]+$/.test(passwordInput.value) &&
+                           hintLength <= 140 &&
                            totalMinutes >= 5;
             
             if (isValid) {
@@ -1001,6 +1083,13 @@ function createTimerPasswordModal(padlockType, currentConfig = {}) {
         hintInput.addEventListener('input', updateHintCounter);
         hoursSelect.addEventListener('change', updateTotalTime);
         minutesSelect.addEventListener('change', updateTotalTime);
+
+        modal.querySelector('#passwordRandom').addEventListener('click', () => {
+            passwordInput.value = generateRandomPassword();
+            updatePasswordCounter();
+            passwordInput.focus();
+            passwordInput.setSelectionRange(passwordInput.value.length, passwordInput.value.length);
+        });
         
         // Initialize displays
         updatePasswordCounter();
@@ -1021,14 +1110,16 @@ function createTimerPasswordModal(padlockType, currentConfig = {}) {
         });
         
         okButton.addEventListener('click', () => {
-            const password = passwordInput.value.trim();
+            // Uppercased for the same reason as createPasswordModal.
+            const password = passwordInput.value.trim().toUpperCase();
             const hint = hintInput.value.trim();
             const hours = parseInt(hoursSelect.value);
             const minutes = parseInt(minutesSelect.value);
-            
+
             const totalMinutes = hours * 60 + minutes;
-            if (password.length >= 4 && password.length <= 8 && 
-                hint.length <= 140 && 
+            if (password.length >= 4 && password.length <= 8 &&
+                /^[A-Z]+$/.test(password) &&
+                hint.length <= 140 &&
                 totalMinutes >= 5) {
                 
                 const totalMs = (hours * 60 + minutes) * 60 * 1000;
@@ -1041,7 +1132,7 @@ function createTimerPasswordModal(padlockType, currentConfig = {}) {
                 }
                 
                 const result = {
-                    Password: password || "password",
+                    Password: password,
                     Hint: hint || "Take a guess...",
                     RemoveTimer: CurrentTime + totalMs,
                     TimerDuration: totalMs, // Store duration for reuse when applying outfits
@@ -1531,5 +1622,7 @@ window.BCOM_ModalSystem = {
     createTimerModal,
     createPasswordModal,
     createTimerPasswordModal,
-    createAppearanceOptionsModal
+    createAppearanceOptionsModal,
+    generateRandomPassword,
+    generateRandomCombination
 };

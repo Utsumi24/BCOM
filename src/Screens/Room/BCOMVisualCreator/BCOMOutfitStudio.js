@@ -283,6 +283,44 @@ function OutfitStudioRegisterHooks() {
             return next(args);
         });
 
+        // Restore the Studio's UI after BC's layering subscreen closes.
+        //
+        // This is registered ONCE, here, and scoped to our own screen. It used to be
+        // registered inside OutfitStudioOpenLayering, which was wrong twice over:
+        //
+        //   1. Layering._ExitCallbacks is a global append-only array with no removal API,
+        //      so every single open-layering registered another copy that lived for the
+        //      rest of the session.
+        //   2. It was registered with no `screen` filter, so each copy fired on EVERY
+        //      Layering.Exit() anywhere in the game -- the appearance/wardrobe screen,
+        //      Crafting, Shop2, the normal chatroom dialog -- and unconditionally set
+        //      outfit-studio-container back to display:block. That is why changing an
+        //      item's layering inside the wardrobe left the Studio's item grid floating
+        //      on top of everything until you left the wardrobe and came back.
+        //
+        // Passing `screen` makes BC compare it against CurrentScreen at exit time, so this
+        // now only runs for a layering session started from the Studio itself.
+        if (typeof Layering !== 'undefined' && typeof Layering.RegisterExitCallbacks === 'function') {
+            Layering.RegisterExitCallbacks({
+                screen: "BCOMOutfitStudio",
+                callback: () => {
+                    // Only act on a layering session the Studio actually started.
+                    if (!OutfitStudioInLayering) return;
+                    OutfitStudioInLayering = false;
+
+                    const container = document.getElementById('outfit-studio-container');
+                    if (container) {
+                        container.style.display = 'block';
+                    }
+
+                    if (OutfitStudioChar) {
+                        CharacterRefresh(OutfitStudioChar);
+                        OutfitStudioSelectGroup(OutfitStudioSelectedGroup);
+                    }
+                }
+            });
+        }
+
         OutfitStudioHooksRegistered = true;
     } catch (error) {
         console.error('[Outfit Studio] Failed to register hooks:', error);
@@ -1218,26 +1256,20 @@ function OutfitStudioOpenLayering() {
         container.style.display = 'none';
     }
 
-    // Initialize the layering UI
+    // Initialize the layering UI.
+    //
+    // The exit callback that restores our UI is registered once in
+    // OutfitStudioRegisterHooks, NOT here. Layering._ExitCallbacks has no removal API, so
+    // registering per-open leaked a callback every time and -- being unscoped -- fired on
+    // every Layering.Exit() in the game, including the wardrobe's.
     if (typeof Layering !== 'undefined' && typeof Layering.Init === 'function') {
         Layering.Init(equippedItem, OutfitStudioChar);
-
-        // Register exit callback to restore Outfit Studio UI
-        Layering.RegisterExitCallbacks({
-            callback: () => {
-                OutfitStudioInLayering = false;
-
-                // Show the container again
-                const container = document.getElementById('outfit-studio-container');
-                if (container) {
-                    container.style.display = 'block';
-                }
-
-                // Refresh the character and grid
-                CharacterRefresh(OutfitStudioChar);
-                OutfitStudioSelectGroup(OutfitStudioSelectedGroup);
-            }
-        });
+    } else {
+        // No layering UI available; don't strand the flag with the grid hidden.
+        OutfitStudioInLayering = false;
+        if (container) {
+            container.style.display = 'block';
+        }
     }
 }
 

@@ -871,7 +871,8 @@ async function configurePadlockProperties(padlockType) {
                 config.CombinationNumber || "",
                 4,
                 "0000",
-                "input"
+                "input",
+                window.BCOM_ModalSystem.generateRandomCombination
             );
             if (combo !== null) {
                 // Ensure it's exactly 4 digits, pad with zeros if needed
